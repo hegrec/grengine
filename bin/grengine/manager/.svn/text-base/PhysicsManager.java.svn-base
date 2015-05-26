@@ -1,0 +1,229 @@
+package manager;
+
+import world.Tile;
+import world.Vec2;
+import appstate.BaseState;
+import entity.Entity;
+
+public abstract class PhysicsManager {
+
+
+	private static void iteratePhysics(float delta, Entity ent) 
+	{
+
+		
+		
+		Vec2 vecSim = ent.physicsSimulate(delta);
+		
+		
+		//if (ent.getAppliedForce().magnitude() > 0.1 && ent.getPhysicsType() == Entity.PHYS_SIM)
+		//{
+		//	System.out.println(ent+" had an applied force of "+ent.getAppliedForce());
+		//}
+		
+		
+		vecSim = vecSim.add(ent.getAppliedForce());
+		ent.clearAppliedForce();
+		
+		Vec2 accelerationVector = new Vec2(0,0);
+		Vec2 velocityVector = new Vec2(0,0);
+		if (ent.getPhysicsType() == Entity.PHYS_SIM) //simulated physics based on accelerations and forces
+		{
+			//apply friction
+			float frictionCoefficient = 50f;
+			Vec2 frictionalForce = ent.getVelocity().scale(-frictionCoefficient);
+			frictionalForce.scale(ent.getMass()*9.8f);
+			
+			
+			vecSim = vecSim.add(frictionalForce);
+			
+			//net force = applied force + friction
+			
+			
+			accelerationVector = vecSim.scale(1/ent.getMass()); //a = f*(1/m)
+			
+			//kill any minor slidy movement
+			if (accelerationVector.magnitude()<0.01 && ent.getVelocity().magnitude()<0.01)
+			{
+			
+			}
+			else
+			{
+				velocityVector = ent.getVelocity().add(accelerationVector);
+			}
+		}
+		else if (ent.getPhysicsType() == Entity.PHYS_WALK) //constant velocity entities.
+		{
+			velocityVector = vecSim;
+		}
+		
+		
+		ent.setVelocity(velocityVector);
+		if (!velocityVector.compareTo(new Vec2(0,0))) //If our velocity is not (0,0), move us
+		{
+			//System.out.println(velocityVector);
+			
+			Vec2 finalPos = ent.getPos().add(velocityVector.scale(delta*3));
+			
+			Tile thisTile = WorldManager.getTileAtPos(finalPos);
+			if (thisTile != null && !thisTile.solid)
+			{
+				
+				//if (ent.isPlayer())
+					//System.out.println(velocityVector);
+				
+				Entity collidingEnt = collisionCheck(finalPos,ent);
+				
+				
+				if (collidingEnt == null)
+					
+					ent.setPos(finalPos);
+				
+				else
+				{
+					
+					if (ent.getPhysicsType() == Entity.PHYS_WALK && collidingEnt.getPhysicsType() == Entity.PHYS_WALK)
+					{
+						ent.setVelocity(new Vec2(0,0));
+						collidingEnt.setVelocity(new Vec2(0,0));
+						return;
+					}
+					//TODO: make this better, possibly set velocities directly, use law of conservation of momentum
+					//collision force = mass * (Vf-Vi)/delta
+					//apply momentum of ent to colliding ent and vice versa
+					
+					Vec2 momentumEnt = ent.getVelocity().scale(ent.getMass());
+					
+					
+					
+					
+					
+					float staticFriction = collidingEnt.getMass();
+					if (momentumEnt.magnitude() < staticFriction) return; //players can't push cars this way unless they are one big mofo, or the car weighs 5
+					
+					
+					//if (ent.getPhysicsType() == Entity.PHYS_SIM)
+					//System.out.println("MOMENTUM: "+momentumEnt+" "+ent.getVelocity());
+					collidingEnt.applyForce(momentumEnt);
+					//for every force there is an equal and opposite reactionary force
+					
+					if (ent.getPhysicsType() == Entity.PHYS_SIM)
+						ent.applyForce(momentumEnt.scale(-0.5f));
+				}
+			}
+			else
+			{
+				ent.setVelocity(new Vec2(0,0));
+			}
+		}
+	}
+	
+	
+	
+	private static Entity collisionCheck(Vec2 finalPos, Entity ent) {
+
+		Vec2 worldMax = finalPos.add(ent.getOBBMax());
+		Vec2 worldMin = finalPos.add(ent.getOBBMin());
+		
+		Entity[] worldEnts = EntityManager.getGlobalEntities();
+		for (int index = 0;index < worldEnts.length; index++)
+		{
+			
+			Entity collider = worldEnts[index];
+			if (collider != ent && collider != ent.getParent() && ent != collider.getParent()) //we don't collide with ourselves
+			{
+				float left1, left2;
+				float right1, right2;
+				float top1, top2;
+				float bottom1, bottom2;
+
+				left1 = worldMin.x;
+				left2 = collider.getPos().add(collider.getOBBMin()).x;
+				right1 = worldMax.x;
+				right2 = collider.getPos().add(collider.getOBBMax()).x;
+				top1 = worldMax.y;
+				top2 = collider.getPos().add(collider.getOBBMax()).y;
+				bottom1 = worldMin.y;
+				bottom2 = collider.getPos().add(collider.getOBBMin()).y;
+
+				if (bottom1 > top2) continue;
+				if (top1 < bottom2) continue;
+
+				if (right1 < left2) continue;
+				if (left1 > right2) continue;
+
+				return collider;
+			}
+			
+		}
+		
+		
+		
+		return null;
+	}
+
+
+
+
+
+	public static void simulate(float delta) {
+		Entity[] ents = EntityManager.getGlobalEntities();
+		for (int i=0;i<ents.length;i++)
+		{
+			//System.out.println(BaseState.SERVER);
+			if (ents[i].getParent() == null && BaseState.CLIENT || (BaseState.SERVER && !ents[i].isPlayer())) //players are simulated clientside, serverside off input
+				iteratePhysics(delta,ents[i]);
+			
+			
+			
+			
+			
+			//premove all non parented entities
+			//check for collision between entities, and reposition
+			//move all parented entities with their parents
+			
+			
+		}
+		
+		
+		//check for collision between entities, and reposition
+		
+		for (int i=0;i<ents.length;i++)
+		{
+			Entity parent = ents[i].getParent();
+			if (parent != null)
+			{
+				ents[i].setPos(parent.getPos());
+				
+				
+				
+			}
+			
+			
+
+		}
+		
+		
+		
+		
+		
+	}
+
+
+
+
+
+	public static void simulate(float deltaTime, Entity ent) {
+		iteratePhysics(deltaTime,ent);
+		
+		Entity parent = ent.getParent();
+		if (parent != null)
+		{
+			ent.setPos(parent.getPos());
+			
+			
+			
+		}
+		
+	}
+}

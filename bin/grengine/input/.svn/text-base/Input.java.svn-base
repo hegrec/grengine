@@ -1,0 +1,26 @@
+package input;
+
+public class Input {
+
+	
+	
+	public boolean up;
+	public boolean down;
+	public boolean left;
+	public boolean right;
+	public boolean attack;
+	public boolean use;
+	public Input()
+	{
+		up = false;
+		down = false;
+		left = false;
+		right = false;
+		attack = false;
+		use = false;
+	}
+	public String toString()
+	{
+		return up+" "+down+" "+left+" "+right+" "+attack;
+	}
+}

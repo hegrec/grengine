@@ -1,0 +1,120 @@
+package appstate;
+
+import game.inventory.Item;
+import manager.BuildingManager;
+import manager.HookManager;
+import manager.WorldManager;
+import network.NetworkMessage;
+import player.PlayerNetworking;
+import weapon.AK47;
+import world.Tile;
+import building.Building;
+
+public class BaseState {
+	
+	public static final int TICKRATE = 10; //ticks per second
+	public static final int MAX_ENTITIES = 1000;
+	public static final int MAX_PLAYERS = 10;
+	public static final double INTERPOLATION_DELAY = 0.1d; //we interpolate positions based on a time 0.1 seconds in the past
+	public static boolean SERVER = false;
+	public static boolean CLIENT = false;
+	
+	public int currentFPS;	
+	protected static long startTime = System.currentTimeMillis(); //time elapsed since server started, pauses when no players are online
+	
+	public BaseState()
+	{
+		
+		initializeTileTypes();
+		initializeBuildingTypes();
+		defineItems();
+		HookManager.callHook("initialize",null);
+		
+	}
+	private void defineItems() {
+		Item testItem = Item.defineItem("AK-47");
+		testItem.entityClass = AK47.class;
+		testItem.category = "Weapon";
+		testItem.icon = "resource/ak47.png";
+		testItem.weight = 5;
+	}
+	private void initializeBuildingTypes() {
+		Building b = BuildingManager.defineBuilding("General Store");
+
+		b.hasInterior = true;
+		b.setInteriorSize(10,10);
+		b.setTexture("resource/building001.png");
+		
+		
+		Building b2 = BuildingManager.defineBuilding("Other Store");
+
+		b2.hasInterior = true;
+		b2.setInteriorSize(10,10); 
+		b2.setTexture("resource/testbuilding.png");
+		
+		
+		Building b3 = BuildingManager.defineBuilding("Warehouse");
+
+		b3.hasInterior = true;
+		b3.setInteriorSize(10,10); 
+		b3.setTexture("resource/building002.png");
+		
+	}
+	private void initializeTileTypes() {
+		Tile grass = WorldManager.addTileType("Grass");
+		grass.texture = "resource/grass.png";
+		grass.solid = false;
+		
+		Tile sand = WorldManager.addTileType("Sand");
+		sand.texture = "resource/sand.png";
+		sand.solid = false;
+		
+		Tile rock = WorldManager.addTileType("Rock");
+		rock.texture = "resource/rock.png";
+		rock.solid = true;
+		
+		Tile water = WorldManager.addTileType("Water");
+		water.texture = "resource/water.png";
+		water.solid = true;
+		
+		
+		
+		
+		Tile roadplain = WorldManager.addTileType("RoadPlain");
+		roadplain.texture = "resource/roadplain.png";
+		roadplain.solid = false;
+		
+		Tile roadcenter = WorldManager.addTileType("RoadCenter");
+		roadcenter.texture = "resource/roadcenter.png";
+		roadcenter.solid = false;
+		
+		Tile roadcorner = WorldManager.addTileType("RoadCorner");
+		roadcorner.texture = "resource/roadcorner.png";
+		roadcorner.solid = false;
+		
+		Tile sidewalk = WorldManager.addTileType("Sidewalk");
+		sidewalk.texture = "resource/sidewalk.png";
+		sidewalk.solid = false;
+		
+	}
+
+	public int getCurrentFPS() {
+		// TODO Auto-generated method stub
+		return this.currentFPS;
+	}
+	
+	//stub for derived classes
+	public void onReceiveMessage(PlayerNetworking connectionOwner, NetworkMessage msgIncoming)
+	{
+		
+	}
+	
+	/**
+	 * Returns the time in seconds since the server was started
+	 * @return
+	 */
+	public static double getCurrentTime() {
+		return (System.currentTimeMillis()-startTime)/1000d;
+	}	
+
+}

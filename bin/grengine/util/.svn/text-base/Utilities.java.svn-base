@@ -1,0 +1,115 @@
+package util;
+
+import java.io.UnsupportedEncodingException;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+
+import manager.EntityManager;
+import world.Vec2;
+import entity.Entity;
+
+public abstract class Utilities {
+	
+	private final static String srvkey = "ynho7ct864329rhf9b2rn746fbntv297nf97br2dst3d35chgc4tybhwc4gxw4tgtr5jh";
+	public static float lerp( float delta,float from,float to)
+	{
+	    if ( delta > 1 ) return to;
+	    if ( delta < 0 ) return from;
+	    
+	    return from + (to - from) * delta;
+	}
+	
+	public static Vec2 lerpVector(float delta, Vec2 from, Vec2 to)
+	{
+		Vec2 lerpedVec = new Vec2(0,0);
+		lerpedVec.x = lerp(delta,from.x,to.x);
+		lerpedVec.y = lerp(delta,from.y,to.y);
+		
+		return lerpedVec;
+		
+	}
+	public static Entity traceLine(Vec2 lineStart,Vec2 lineEnd,Entity filter)
+	{
+
+		Entity[] ents = EntityManager.getGlobalEntities();
+		
+		for (int i=0;i<ents.length;i++)
+		{
+			Entity ent = ents[i];
+		
+			if (ent != filter) 
+			{
+				Vec2 intersect = lineIntersect(lineStart,lineEnd,ent.getPos().add(ent.getOBBMax()),ent.getPos().add(ent.getOBBMin()));
+				
+				if (intersect.x>(ent.getOBBMax().x+ent.getPos().x) || intersect.x < (ent.getOBBMin().x+ent.getPos().x)) continue;
+				if (intersect.y>(ent.getOBBMax().y+ent.getPos().y) || intersect.y < (ent.getOBBMin().y+ent.getPos().y)) continue;
+				
+				//because the lineIntersect function assumes a line of infinite length, we must check that our hit ent is actually on the line traced
+				if (ent.getPos().distance(lineStart) > (lineEnd.subtract(lineStart).abs().magnitude())) continue;
+				if (ent.getPos().distance(lineEnd) > (lineStart.subtract(lineEnd).abs().magnitude())) continue;
+				
+				
+				return ent;
+			}
+
+		
+		}
+		return null;
+	}
+	private static Vec2 lineIntersect(Vec2 one,Vec2 two,Vec2 three, Vec2 four)
+	{
+		
+		
+		
+		
+		float uA = ((four.x-three.x)*(one.y-three.y) - (four.y - three.y)*(one.x-three.x));
+		uA /= ((four.y-three.y)*(two.x-one.x) - (four.x-three.x)*(two.y-one.y));
+		
+		float uB = ((two.x-one.x)*(one.y-three.y) - (two.y - one.y)*(one.x-three.x));
+		uB /= ((four.y-three.y)*(two.x-one.x) - (four.x-three.x)*(two.y-one.y));		
+		
+		
+		float x = one.x + uA*(two.x-one.x);
+		float y = one.y + uA*(two.y-one.y);
+		
+		
+	
+		
+		return new Vec2(x,y);
+	}
+	public static String hashPass(String pass) throws NoSuchAlgorithmException, UnsupportedEncodingException {
+		String hashed = AeSimpleSHA1.SHA1(pass+srvkey);
+		return hashed;
+	}
+	  public static float standardDeviation(ArrayList<Float> nums)
+		{
+			
+				
+				
+			float total = arraySum(nums);
+			float mean = total / nums.size();
+			
+			
+			for (int i=0;i<nums.size();i++)
+			{
+				float minusMean = nums.get(i)-mean;
+				nums.set(i, minusMean*minusMean);
+				
+			}
+			float summedSquares = arraySum(nums);
+			summedSquares /= nums.size();
+				
+			
+			return (float) Math.sqrt(summedSquares);
+		}
+	    public static float arraySum(ArrayList<Float> nums)
+		{
+			float total = 0;
+			for(int i=0;i<nums.size();i++)
+			{
+				total += nums.get(i);
+			}
+			
+			return total;
+		}
+}

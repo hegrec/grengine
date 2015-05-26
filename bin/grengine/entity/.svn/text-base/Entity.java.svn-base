@@ -1,0 +1,296 @@
+package entity;
+import input.Input;
+
+import java.util.ArrayList;
+
+import player.Player;
+
+import manager.EntityManager;
+import network.NetworkedVariable;
+import world.Vec2;
+import world.WorldChunk;
+
+
+public class Entity {
+	public static final int PHYS_SIM = 0; //apply forces to move this entity physicsSimulate returns a force
+	public static final int PHYS_WALK = 1; //set the velocity to move this entity physicsSimulate returns a velocity
+	private static final int PHYS_NONE = 2;
+	public NetworkedVariable nwVars;
+	private int entID;
+	public int uniqueID; //increased by one for every created entity, used for setNWEntity
+	protected String name;
+	public State currentState;
+	public State lastState;
+	public Input input;
+	public boolean remove = false; // if this is true, the main class will clear this entity when it checks the variable
+	private WorldChunk activeChunk; //this is the entitie's active chunk on the map, used for PVS
+	public ArrayList<State> stateBuffer;
+	private Vec2 aimVector;
+	private Vec2 lastAimVector;
+	private float nextThink;
+	private boolean noThink;
+	private Vec2 appliedForce; //this is the net force of the current frame, each physics tick, this is taken and calculated to an acceleration and zeroed
+	private boolean takesDamage;
+	public Entity()
+	{
+		nwVars = new NetworkedVariable();
+		currentState = new State();
+		lastState = new State();
+		nextThink = 0;
+		setHealth(100);
+		setMaxHealth(100);
+		input = new Input();
+		setPos(new Vec2(0,0));
+		aimVector = new Vec2(0,1);
+		setVelocity(new Vec2(0,0));
+		stateBuffer = new ArrayList<State>();
+		setOBBMax(new Vec2(0.5,0.5));
+		setOBBMin(new Vec2(-0.5,-0.5));
+		setNoThink(false);
+		setMass(20);
+		setTakesDamage(true);
+		appliedForce = new Vec2(0,0);
+		setPhysicsType(PHYS_NONE);
+		setTexture("resource/missing.png");
+	}
+	public void setEntID(int entID) {
+		this.entID = entID;
+		
+	}
+	public int getEntID() {
+		return entID;
+	}
+	public String getTexture()
+	{
+		return this.getNWString("tex");
+	}
+	public Vec2 getAppliedForce()
+	{
+		return appliedForce;
+	}
+	public void applyForce(Vec2 forceVector)
+	{
+		appliedForce = appliedForce.add(forceVector);
+	}
+	public void onUse(Player user)
+	{
+		System.out.println(this+" was used by "+user);
+		
+	}
+	
+	//if A is parented to B, A follows the same motion as B. TODO: When B rotates, A rotates about the axis of B's position
+	public void setParent(Entity parent)
+	{
+		
+		this.setNWEntity("parent",parent);
+		
+	}
+	public void remove()
+	{
+		this.remove = true;
+	}
+	public Entity getParent()
+	{
+		return this.getNWEntity("parent");
+	}
+	public void setTexture(String texture)
+	{
+		this.setNWString("tex",texture);
+	}
+	public void setPos(Vec2 vec)
+	{
+		currentState.position = vec;
+	}
+	public void setVelocity(Vec2 vec)
+	{
+		currentState.velocity = vec;
+	}
+	public Vec2 getVelocity()
+	{
+		return currentState.velocity;
+	}
+	public Vec2 getPos()
+
+	{
+		return currentState.position;
+	}
+
+	public void setAimVector(Vec2 aimVector) {
+		this.lastAimVector = new Vec2(this.aimVector.x,this.aimVector.y);
+		this.aimVector = aimVector.normalize();
+	}
+
+	public Vec2 getAimVector() {
+		return aimVector;
+	}
+	public Vec2 lastAimVector() {
+		return lastAimVector;
+	}
+	public void clearNetworkFrame()
+	{
+		nwVars.clearFrame();
+	}
+	public String getName()
+	{
+		return this.name;
+	}
+	public void setName(String name)
+	{
+		this.name = name;
+	}
+	public boolean isPlayer()
+	{
+		return false;
+	}
+	
+	public void setNWVector(String varName, Vec2 value)
+	{
+		nwVars.vecMap.put(varName, value);
+		nwVars.vecFrameMap.put(varName, value);
+		
+	}
+	public Vec2 getNWVector(String varName)
+	{
+		return nwVars.vecMap.get(varName);
+	}
+	
+	public void setNWInt(String varName, int value)
+	{
+		nwVars.intMap.put(varName, value);
+		nwVars.intFrameMap.put(varName, value);
+	}
+	public int getNWInt(String varName)
+	{
+		if (!nwVars.intMap.containsKey(varName)) return -1;
+		return nwVars.intMap.get(varName);
+	}
+	public void setNWString(String varName, String value)
+	{
+		
+		if (value == null) return;
+		
+		nwVars.stringMap.put(varName, value);
+		nwVars.stringFrameMap.put(varName, value);
+	}
+	public String getNWString(String varName)
+	{
+		if (!nwVars.stringMap.containsKey(varName)) return null;
+		return nwVars.stringMap.get(varName);
+	}
+	public void setNWEntity(String varName, Entity value)
+	{
+		int uniqueID = -1;
+		if (value != null)
+		{
+			uniqueID = value.uniqueID;
+		}
+		//System.out.println("Setting network entity for "+this+" as "+value+" with id "+uniqueID);
+		nwVars.entityMap.put(varName, uniqueID);
+		nwVars.entityFrameMap.put(varName, uniqueID);
+	}
+	public Entity getNWEntity(String varName)
+	{
+		if (!nwVars.entityMap.containsKey(varName)) return null;
+		
+		int uniqueID = nwVars.entityMap.get(varName);
+		Entity e = EntityManager.getEntityByUniqueID(uniqueID);
+		
+		return e;
+	}
+	
+	
+	
+	public WorldChunk getCurrentChunk() {
+		return activeChunk;
+	}
+	public void setCurrentChunk(WorldChunk chunk) {
+		activeChunk = chunk;
+	}
+	
+	public int getHealth()
+	{
+		return getNWInt("health");
+	}
+	
+	public int getMaxHealth()
+	{
+		return getNWInt("maxhealth");
+	}
+	
+	public void setHealth(int h)
+	{
+		h = h < 0 ? 0 : h;
+		setNWInt("health", h);
+	}
+	
+	public void setMaxHealth(int h)
+	{
+		h = h < 0 ? 0 : h;
+		setNWInt("maxhealth", h);
+	}
+	public void setOBBMax(Vec2 obbMax) {
+		this.setNWVector("obbMax",obbMax);
+	}
+	public Vec2 getOBBMax() {
+		return this.getNWVector("obbMax");
+	}
+	public void setOBBMin(Vec2 obbMin) {
+		this.setNWVector("obbMin",obbMin);
+	}
+	public Vec2 getOBBMin() {
+		return this.getNWVector("obbMin");
+	}
+	public boolean isBuilding() {
+		return false;
+	}
+	public boolean isNPC()
+	{
+		return false;
+	}
+	public void think() {
+		
+	}
+	public void setNoThink(boolean b) {
+		this.noThink = b;
+		
+	}
+	public void setNextThink(float i) {
+		this.nextThink = i;
+		
+	}
+	public float getNextThink() {
+		return this.nextThink;
+	}
+	public boolean shouldThink() {
+		return !this.noThink;
+	}
+	public void setMass(int mass) {
+		this.setNWInt("mass",mass);
+	}
+	public float getMass() {
+		return this.getNWInt("mass");
+	}
+	public Vec2 physicsSimulate(float delta) {
+		// TODO Auto-generated method stub
+		return new Vec2(0,0);
+	}
+	public void setPhysicsType(int physicsType) {
+		this.setNWInt("physType",physicsType);
+	}
+	public int getPhysicsType() {
+		return this.getNWInt("physType");
+	}
+	public void clearAppliedForce() {
+		
+		this.appliedForce.x = 0;
+		this.appliedForce.y = 0;
+	}
+	public void setTakesDamage(boolean takesDamage) {
+		this.takesDamage = takesDamage;
+	}
+	public boolean takesDamage() {
+		return takesDamage;
+	}
+
+
+}

@@ -1,0 +1,221 @@
+package resource;
+
+import java.awt.Graphics;
+import java.awt.color.ColorSpace;
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.ComponentColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.DataBufferByte;
+import java.awt.image.Raster;
+import java.awt.image.WritableRaster;
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.IntBuffer;
+import java.util.HashMap;
+import java.util.Hashtable;
+
+import javax.imageio.ImageIO;
+
+import org.lwjgl.opengl.GL11;
+
+import appstate.ClientState;
+/**
+ * A utility class to load textures for JOGL
+ *
+ * @author Kevin Glass
+ */
+public class TextureLoader {
+    private HashMap<String,Texture> table = new HashMap<String, Texture>();
+    
+    private ColorModel glAlphaColorModel;
+    private ColorModel glColorModel;
+    
+    public TextureLoader() {
+        
+    
+        glAlphaColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB),
+                                            new int[] {8,8,8,8},
+                                            true,
+                                            false,
+                                            ComponentColorModel.TRANSLUCENT,
+                                            DataBuffer.TYPE_BYTE);
+                                            
+        glColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB),
+                                            new int[] {8,8,8,0},
+                                            false,
+                                            false,
+                                            ComponentColorModel.OPAQUE,
+                                            DataBuffer.TYPE_BYTE);
+    }
+    
+    private int createTextureID() 
+    { 
+    	IntBuffer iBuff = createIntBuffer(1);
+       GL11.glGenTextures(iBuff);
+       return iBuff.get(0); 
+    } 
+    protected IntBuffer createIntBuffer(int size) {
+        ByteBuffer temp = ByteBuffer.allocateDirect(4 * size);
+        temp.order(ByteOrder.nativeOrder());
+
+        return temp.asIntBuffer();
+      }
+    public Texture getTexture(String name) throws IOException {
+        Texture tex = (Texture) table.get(name);
+        
+        if (tex != null) {
+            return tex;
+        }
+        
+        tex = getTexture(name,
+                         GL11.GL_TEXTURE_2D, // target
+                         GL11.GL_RGBA,     // dst pixel format
+                         GL11.GL_LINEAR, // min filter (unused)
+                         GL11.GL_LINEAR, // mag filter (unused)
+                         true,  // wrap?
+                         false); // mipmap?
+        
+        table.put(name,tex);
+        
+        return tex;
+    }
+    
+    public Texture getTexture(String name, 
+                              int target, 
+                              int dstPixelFormat, 
+                              int minFilter, 
+                              int magFilter, 
+                              boolean wrap, 
+                              boolean mipmapped) throws IOException 
+    { 
+        int srcPixelFormat = 0;
+        
+        // create the texture ID for this texture 
+        int textureID = createTextureID(); 
+        //System.out.println("Loading texture "+name+" to ID: "+textureID);
+        Texture texture = new Texture(name,target,textureID); 
+ 
+        // bind this texture 
+        GL11.glBindTexture(target, textureID); 
+ 
+        BufferedImage bufferedImage = loadImage(name); 
+        
+        // Getting the real Width/Height of the Texture in the Memory
+      int realWidth = get2Fold(bufferedImage.getWidth()); 
+        int realHeight = get2Fold(bufferedImage.getHeight());
+        
+
+        // don't need it?
+        texture.setBufferedImage(bufferedImage); 
+        texture.setWidth(realWidth);
+        texture.setHeight(realHeight);
+        
+        if (bufferedImage.getColorModel().hasAlpha()) {
+            srcPixelFormat = GL11.GL_RGBA;
+        } else {
+            srcPixelFormat = GL11.GL_RGB;
+        }
+        
+        // convert that image into a byte buffer of texture data 
+        ByteBuffer textureBuffer = convertImageData(bufferedImage,texture); 
+        textureBuffer.position(0);
+        int wrapMode = wrap ? GL11.GL_REPEAT : GL11.GL_CLAMP; 
+
+        if (target == GL11.GL_TEXTURE_2D) 
+        { 
+        	GL11.glTexParameteri(target, GL11.GL_TEXTURE_WRAP_S, wrapMode); 
+        	GL11.glTexParameteri(target, GL11.GL_TEXTURE_WRAP_T, wrapMode); 
+        	GL11.glTexParameteri(target, GL11.GL_TEXTURE_MIN_FILTER, minFilter); 
+        	GL11.glTexParameteri(target, GL11.GL_TEXTURE_MAG_FILTER, magFilter);
+        }
+ 
+        // create either a series of mipmaps of a single texture image based on what's loaded 
+        if (mipmapped) 
+        { 
+            /*glu.gluBuild2DMipmaps(target, 
+                                  dstPixelFormat, 
+                                realWidth, 
+                          realHeight, 
+                                  srcPixelFormat, 
+                                  GL2.GL_UNSIGNED_BYTE, 
+                                  textureBuffer); */
+        } 
+        else 
+        { 
+        	GL11.glTexImage2D(target, 
+                          0, 
+                          dstPixelFormat, 
+                          realWidth, 
+                       realHeight, 
+                          0, 
+                          srcPixelFormat, 
+                          GL11.GL_UNSIGNED_BYTE, 
+                          textureBuffer ); 
+        } 
+        return texture; 
+    } 
+    
+   private int get2Fold(int fold) {
+      int ret = 2;
+      while (ret < fold) {
+         ret *= 2;
+      }
+      return ret;
+   }
+
+    private ByteBuffer convertImageData(BufferedImage bufferedImage,Texture texture) throws IOException 
+    { 
+        ByteBuffer imageBuffer = null; 
+        WritableRaster raster;
+        BufferedImage texImage;
+        
+        int texWidth = get2Fold(bufferedImage.getWidth());
+        int texHeight = get2Fold(bufferedImage.getHeight());
+        texture.setTextureHeight(texHeight);
+        texture.setTextureWidth(texWidth);
+        
+        if (bufferedImage.getColorModel().hasAlpha()) {
+            raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE,texWidth,texHeight,4,null);
+            texImage = new BufferedImage(glAlphaColorModel,raster,false,new Hashtable<Object, Object>());
+        } else {
+            raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE,texWidth,texHeight,3,null);
+            texImage = new BufferedImage(glColorModel,raster,false,new Hashtable<Object, Object>());
+        }
+        Graphics g = texImage.getGraphics();
+        g.drawImage(bufferedImage,0,0,null);
+        byte[] data = ((DataBufferByte) texImage.getRaster().getDataBuffer()).getData(); 
+
+        imageBuffer = ByteBuffer.allocateDirect(data.length); 
+        imageBuffer.order(ByteOrder.nativeOrder()); 
+        imageBuffer.put(data, 0, data.length); 
+
+        return imageBuffer; 
+    } 
+    
+    private BufferedImage loadImage(String ref) throws IOException 
+    { 
+     // File file = new File(ref);
+      InputStream input = this.getClass().getResourceAsStream(ref);
+      //if (ClientState.APPLET)
+    	//  file= new File(new URL("http://hegrec.webege.com/"+ref).getFile());
+      
+      
+        if (input == null) {
+            throw new IOException("Cannot find: "+ref);
+        }
+        
+        BufferedImage bufferedImage = ImageIO.read(new BufferedInputStream(input)
+        ); 
+        System.out.println(input+" "+ref);
+        return bufferedImage;
+    } 
+}

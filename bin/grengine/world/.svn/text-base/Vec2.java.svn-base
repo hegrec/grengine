@@ -1,0 +1,119 @@
+package world;
+
+
+public class Vec2 {
+
+	public static final Vec2 origin = new Vec2(0,0);
+	public float x;
+	public float y;
+	
+	public Vec2()
+	{
+		x = 0;
+		y = 0;
+	}
+	
+	public Vec2(float d, float e)
+	{
+		x = d;
+		y = e;
+	}
+
+	public Vec2(double d, double e) {
+		x = (float) d;
+		y = (float) e;
+	}
+
+	public Vec2 rotate(float angle)
+	{
+		float cosAng = (float) Math.cos(angle);
+		float sinAng = (float) Math.sin(angle);
+		
+		Vec2 vecOut = new Vec2(0,0);
+		
+		vecOut.x = (this.x*cosAng-this.y*sinAng);
+		vecOut.y = (this.x*sinAng+this.y*cosAng);
+		
+		return vecOut;
+	}
+	public String toString()
+	{
+		return "Vec("+x+","+y+")";
+	}
+	
+	public Vec2 subtract(Vec2 vec)
+	{
+		return new Vec2(x-vec.x,y-vec.y);
+	}
+	
+	public Vec2 add(Vec2 vec)
+	{
+		return new Vec2(x+vec.x,y+vec.y);
+	}
+	
+	public Vec2 scale(float d)
+	{
+		return new Vec2(x*d,y*d);
+	}
+	
+	public Vec2 normalize()
+	{
+		float len = magnitude()+0.00001f;
+		return new Vec2(x/len,y/len);
+	}
+	
+	public boolean compareTo(Vec2 origin2) 
+	{
+		if (origin2.x != this.x)
+			return false;
+		if (origin2.y != this.y)
+			return false;
+		
+		return true;
+	}
+	public float angle(Vec2 vec)
+	{
+		Vec2 n1 = vec.normalize();
+		Vec2 n2 = this.normalize();
+		double dot = n2.DotProduct(n1);
+		System.out.println(dot);
+		
+		return (float) Math.acos(dot);
+	}
+	public float magnitude()
+	{
+		return (float) Math.sqrt(x*x+y*y);
+	}
+	
+	public float DotProduct(Vec2 vec)
+	{
+		return x*vec.x+y*vec.y;
+	}
+	
+	public Vec2 NearestTile() {
+		return new Vec2(Math.round(this.x),Math.round(this.y));
+	}
+	
+	public float distance(Vec2 vec) {
+		return (float) Math.sqrt(distanceSquared(vec));
+	}
+	
+	public int hashCode() {
+		return ((new Double(x).hashCode() >> 13) ^ new Double(y).hashCode());
+	}
+
+	//less expensive
+	public float distanceSquared(Vec2 vec) {
+		// TODO Auto-generated method stub
+		return ((vec.x-this.x)*(vec.x-this.x))+((vec.y-this.y)*(vec.y-this.y));
+	}
+
+	public Vec2 abs() {
+		Vec2 out = new Vec2(this.x,this.y);
+		
+		if (out.x < 0); out.x *= -1;
+		if (out.y < 0); out.y *= -1;
+		return out;
+	}
+	
+}

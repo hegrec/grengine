@@ -1,0 +1,56 @@
+package world;
+
+import resource.Texture;
+
+
+
+public class Tile { 
+	public static final int tileSize = 50;
+
+	
+	public int xTileSlot;
+	public int yTileSlot;
+	public MultiTile mTile;
+	public int angle = 0;
+	
+	
+	public String texture;
+	public String tileType;
+	private int tileID;
+	
+	public boolean solid;
+
+
+	public Texture textureObject;
+	public Tile()
+	{
+		
+	}
+
+	public int getTileID()
+	{
+		return this.tileID;
+	}
+
+	public void setTileID(int tileID) 
+	{
+
+		this.tileID = tileID;
+		
+	}
+	
+	public void setTileSlotX(int slot)
+	{
+		xTileSlot = slot;		
+	}
+	public void setTileSlotY(int slot)
+	{
+		yTileSlot = slot;
+	}
+
+	public boolean isMultiTile() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+	
+}

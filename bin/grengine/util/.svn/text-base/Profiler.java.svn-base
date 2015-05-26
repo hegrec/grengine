@@ -1,0 +1,20 @@
+package util;
+
+public class Profiler {
+	
+	
+	private long startTime;
+	public Profiler()
+	{
+		
+	}
+	public void start()
+	{
+		startTime = System.nanoTime();
+	}
+	public void dump()
+	{
+		double timeMS = (System.nanoTime()-startTime)/1000000d;
+		System.out.println("Executed In "+timeMS+" milliseconds");
+	}
+} 

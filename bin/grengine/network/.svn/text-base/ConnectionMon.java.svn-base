@@ -1,0 +1,52 @@
+package network;
+
+import java.io.*;
+import java.net.*;
+
+import appstate.ServerState;
+
+public class ConnectionMon extends Thread {
+	private static ConnectionMon single = new ConnectionMon();
+	public static ConnectionMon get()
+	{
+		return single;
+	}
+	private ServerSocket serverSocket;
+	private ServerState server;
+	public void run()
+	{
+
+		while(true)
+		{
+			
+			try
+			{
+				Socket incoming = serverSocket.accept();
+				
+				server.onNewConnection(incoming);
+				
+			}
+			catch(IOException e)
+			{
+				System.out.println("Failed client connection!");
+			}
+			
+
+		}
+	}
+	public ConnectionMon()
+	{
+
+	}
+	public void initialize(ServerState sServer,int port)
+	{
+		server = sServer;
+		try {
+			serverSocket = new ServerSocket(port);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}	
+		this.start();
+	}
+}

@@ -1,0 +1,202 @@
+package manager;
+
+import java.util.ArrayList;
+
+import player.Player;
+import world.BaseChunkManager;
+import world.MultiTile;
+import world.ServerChunkManager;
+import world.Tile;
+import world.Vec2;
+
+
+
+
+public abstract class WorldManager {
+
+
+	
+	public static int worldSize = 1000;
+	public static int chunkSize = 10; //16x16 tile chunks
+	private static Tile[] tileTypes = new Tile[100];
+	private static int numTileTypes = 0;
+	public static BaseChunkManager chunkMgr = new BaseChunkManager();
+	public static int xMin = -worldSize/2;
+	public static int yMin = -worldSize/2;
+	public static int xMax = worldSize/2;
+	public static int yMax = worldSize/2;
+
+	 public static int getWide()
+	 {
+		 return xMax-xMin;
+	 }
+	 
+	 public static int getTall()
+	 {
+		 return yMax-yMin;
+	 }
+	 public static void setTile(Tile tile, boolean b) {
+		 if (!tile.isMultiTile())
+			 
+			 chunkMgr.setTile(tile,b);
+		 else
+		 {
+			 
+			 MultiTile t = (MultiTile) tile;
+			 for (int i=0;i<t.getTileSet().size();i++)
+			 {
+				 Tile t2 = t.getTileSet().get(i);
+				 
+				 
+				 chunkMgr.setTile(t2,b);
+			 }
+			 
+			 
+			 
+			 
+			 
+		 }
+			
+	}
+	 public static void setTile(Tile tile)
+	 {
+		 
+		 if (!tile.isMultiTile())
+			 
+			 chunkMgr.setTile(tile);
+		 else
+		 {
+			 
+			 MultiTile t = (MultiTile) tile;
+			 for (int i=0;i<t.getTileSet().size();i++)
+			 {
+				 Tile t2 = t.getTileSet().get(i);
+				 
+				 
+				 chunkMgr.setTile(t2);
+			 }
+			 
+			 
+			 
+			 
+			 
+		 }
+
+	 }
+	
+	public static void updateStreamedWorld(Player plys[])
+	{
+		for (int i=0;i<plys.length;i++)
+		{
+			((ServerChunkManager) chunkMgr).checkForPlayerChange(plys[i]);			
+		}
+	}
+	public static void loadForPlayer(Player ply)
+	{
+		((ServerChunkManager) chunkMgr).loadChunksForPlayer(ply);
+	}
+	public static Vec2 getTilePosAtPos(Vec2 finalPos) 
+	{		
+		return new Vec2((int)Math.floor(finalPos.x), (int)Math.floor(finalPos.y));
+	}
+	public static Tile getTile(Vec2 vec) 
+	{
+		return chunkMgr.getTile(vec);
+	}
+	public static Tile getTileAtPos(Vec2 finalPos) 
+	{		
+		return getTile(getTilePosAtPos(finalPos));
+	}
+	public static ArrayList<Tile> getTiles(Vec2 min,Vec2 max)
+	{
+		ArrayList<Tile> tileList = new ArrayList<Tile>();
+		for (int x = (int) min.x;x<=max.x;x++)
+		{
+			for (int y = (int) min.y;y<=max.y;y++)
+			{
+				Tile t = getTileAtPos(new Vec2(x,y));
+				if (t != null)
+					tileList.add(t);
+			}
+		}
+		return tileList;
+	}
+	public static void initializeWorld(BaseChunkManager cManager) {
+		chunkMgr = cManager;
+		
+	}
+	public static boolean VectorInWorld(Vec2 vec) {
+		
+		if (vec.x < WorldManager.xMin || vec.x > WorldManager.xMax) return false;
+		if (vec.y < WorldManager.yMin || vec.y > WorldManager.yMax) return false;
+		return true;
+	}
+	public static Tile addTileType(String tileType) {
+		
+		if (numTileTypes >= tileTypes.length)
+		{
+			System.out.println("Error, increase tile types array size!");
+			return null;
+		}
+		
+		Tile t = new Tile();
+		t.setTileID(numTileTypes);
+		t.tileType = tileType;
+		tileTypes[numTileTypes++] = t;
+		
+		return t;
+	}
+	public static Tile getTileByID(int id)
+	{
+		return tileTypes[id];
+	}
+	public static Tile getTileByType(String name)
+	{
+		for (int i=0;i<tileTypes.length;i++)
+		{
+			if (tileTypes[i] != null && tileTypes[i].tileType.equalsIgnoreCase(name))
+			{
+				return tileTypes[i];
+			}
+		}
+		return null;
+		
+	}
+	public static Tile tileFromTemplate(int tileID) {
+		Tile template = tileTypes[tileID];
+		
+		
+		Tile newTile = new Tile();
+		newTile.setTileID(tileID);
+		newTile.tileType = template.tileType;
+		newTile.solid = template.solid;
+		newTile.texture = template.texture;
+		
+		
+		return newTile;
+	}
+	public static Tile tileFromTemplate(String string) {
+		Tile template = getTileByType(string);
+		
+		
+		Tile newTile = new Tile();
+		newTile.tileType = string;
+		newTile.setTileID(template.getTileID());
+		newTile.solid = template.solid;
+		newTile.texture = template.texture;
+		
+		
+		return newTile;
+	}
+	public static Tile[] getTileTypes() {
+		// TODO Auto-generated method stub
+		return tileTypes;
+	}
+	public static void loadWorld() {
+		if (!chunkMgr.isServerside())
+			return;
+		System.out.println("MySQL Loading World...");
+		((ServerChunkManager)chunkMgr).loadWorld();
+	}
+	
+}

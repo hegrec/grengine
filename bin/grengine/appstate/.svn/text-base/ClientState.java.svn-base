@@ -1,0 +1,436 @@
+package appstate;
+
+
+import java.awt.Canvas;
+import java.io.IOException;
+import java.net.Socket;
+import java.net.UnknownHostException;
+
+import manager.BGUIManager;
+import manager.EntityManager;
+import manager.HookManager;
+import manager.NWMessageManager;
+import manager.ResourceManager;
+import network.MessageConstants;
+import network.NetworkMessage;
+
+import org.lwjgl.LWJGLException;
+import org.lwjgl.Sys;
+import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.Display;
+import org.lwjgl.opengl.DisplayMode;
+import org.lwjgl.opengl.GL11;
+
+import player.Player;
+import player.PlayerNetworking;
+import render.GUI;
+import util.NWHook;
+import bgui.BMenu;
+import bgui.BPanel;
+import clientstates.GameState;
+import clientstates.GameStateManager;
+ 
+public class ClientState extends BaseState
+{
+	private GameStateManager stateManager; //handles changing between different states
+	float lastClockSync = 0;
+	float realLatency = 0f;
+	private long lastFrame;
+
+	public static String connectMessage = "Loading...";
+	public static boolean APPLET = false;
+	public static final String GAMETITLE = "Border Control v0.1a";
+	public static Player localPlayer = new Player();
+	
+	
+	private static PlayerNetworking network; //the clientside network handler
+	
+	//private RenderWindow rWindow;
+    public ClientState()
+    {
+    	
+    	super();
+    	BaseState.CLIENT = true;
+    	ResourceManager.setClientState(this);
+    	stateManager = new GameStateManager();
+    }
+    
+    
+public void startGame(Canvas canvas) {
+		
+		//hook network messages
+    	hookMessages();
+    	
+    	//create the screen
+    	try {
+    		if (canvas == null)
+    		{
+				Display.setDisplayMode(new DisplayMode(800,600));
+				Display.setTitle("Cartel Country");
+				System.out.println("Starting application mode");
+	    	}
+    		else
+    		{
+    			Display.setParent(canvas);
+    			System.out.println("Starting applet mode");
+    		}
+			Display.create();
+		} catch (LWJGLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		//set up opengl stuff
+		GL11.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		GL11.glShadeModel(GL11.GL_SMOOTH); //Smooth shading, interpolate colors between vertexes
+		GL11.glDisable(GL11.GL_DEPTH_TEST);
+		
+		GL11.glMatrixMode(GL11.GL_PROJECTION);
+		GL11.glLoadIdentity();
+		GL11.glOrtho(0, Display.getWidth(), Display.getHeight(), 0, 1, -1);
+		GL11.glMatrixMode(GL11.GL_MODELVIEW);
+		
+		//initialize the delta value
+		getDelta();
+		
+		
+		GUI.createFont("Default", "Courier New", 12, false); //create the default font
+		
+		//finally, initialize the first state (splash screen)
+		stateManager.changeState(stateManager.createState(stateManager.STATE_SPLASH));
+		runGame();
+    	
+	}
+    
+    
+    
+    public void runGame() {
+		
+		//main client loop here
+		while (!Display.isCloseRequested())
+		{
+			float delta = getDelta()/1000f;
+			processInput();
+			
+			preRender(delta);
+			
+			//clear the buffer
+			GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT); 
+			GL11.glColor3f(0.5f,0.5f,1.0f);
+			
+			
+			render(delta);
+			
+			
+			Display.update();
+			
+			postRender(delta);
+			
+			Display.sync(60);
+		}
+		System.out.println("Exiting");
+		Display.destroy();
+		System.exit(0);
+    	
+		
+	}
+	
+	private void processInput() {
+		
+		//run through the keyboard event buffer, process all queued events
+		while (Keyboard.next())
+		{
+			if (Keyboard.getEventKeyState()) //key was pressed
+			{
+				onKeyPressed(Keyboard.getEventKey());
+			}
+			else //key was released
+			{
+				onKeyReleased(Keyboard.getEventKey());
+			}
+		}
+		
+		//run through the mouse event buffer, process all mouse events
+		while (Mouse.next())
+		{
+			if (Mouse.getEventButtonState()) //button pressed
+			{
+				onMousePressed(Mouse.getEventButton());
+			}
+			else if (Mouse.getEventButton() != -1)
+			{
+				onMouseReleased(Mouse.getEventButton());
+			}
+			else
+			{
+				onMouseMoved();
+			}
+		}
+	}
+	
+    private void hookMessages() {
+    	NWMessageManager.addCallback(MessageConstants.INITIAL_SPAWN, new NWHook() { public void onRun(NetworkMessage msgIncoming) {initialSpawn(msgIncoming);}});
+	}
+	private void initialSpawn(NetworkMessage msg)
+    {
+		int myID = msg.readInt();
+			
+		
+		System.out.println(EntityManager.getEntity(myID));
+			if (EntityManager.getEntity(myID) != null)
+				localPlayer = (Player) EntityManager.getEntity(myID);
+			else
+				localPlayer.setEntID(myID);
+
+			startTime = (long) msg.readDouble();
+			ClientState.connectMessage = msg.readString();
+			System.out.println("INITIAL SPAWN! I AM ID: "+myID);
+			
+			HookManager.callHook("initialSpawn", null);
+			stateManager.changeState(stateManager.createState(stateManager.STATE_GAME));
+    }
+	/**
+     *This method is called directly prior to rendering, handle all game logic here (move entities, predict physics etc)
+     */
+	public void preRender(double delta) {
+
+		
+		
+		
+		
+		GameState state = stateManager.getState();
+		if (state != null && state.initialized)
+			state.runLogic(delta);
+		BGUIManager.think();
+		
+		
+		
+	}
+	/**
+	 * 3D drawing loop, pass to various states and let them handle drawing.
+	 * @param delta
+	 */
+	public void render(double delta) {
+		GameState state = stateManager.getState();
+		if (state != null && state.initialized)
+			state.render(delta);
+		
+		BGUIManager.draw();
+		
+	}
+	public void postRender(double delta) {
+		GameState state = stateManager.getState();
+		if (state != null && state.initialized)
+			state.postRender(delta);
+		
+		sendNetworkData();
+		
+	}
+	/**
+	 * Attempt to connect to the server
+	 * @param ip
+	 * @param port
+	 */
+    public void initializeNetwork(String ip,int port)
+    {
+    	Socket myConnection = null;
+		
+		try {
+			myConnection = new Socket(ip,port);
+		} catch (UnknownHostException e) {
+			// TODO Auto-generated catch block
+			System.out.println("Error connecting to server: "+e.getMessage());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			System.out.println("Error connecting to server: "+e.getMessage());
+		} 
+		if (myConnection == null) return;
+		System.out.println("Client Connection Status: "+myConnection.isConnected());
+    	
+    	
+    	network = new PlayerNetworking(myConnection,this);
+    	
+    	
+    	
+    }
+	private void sendNetworkData() { 
+		if (network == null) return;
+			network.sendFrameData();
+	}   
+	/**
+	 * Called as the server sends a message to the client and it is received
+	 */
+    public void onReceiveMessage(PlayerNetworking connectionOwner, NetworkMessage msgIncoming)
+	{
+		short msgType = msgIncoming.readShort();
+		//if (msgType != 31 && msgType != 2 && msgType != 1)
+		//	System.out.println("Received message ID: "+msgType);
+		
+		//special case
+		if (msgType == MessageConstants.INITIAL_SPAWN)
+		{
+			initialSpawn(msgIncoming);
+			return;
+		}
+		
+		NWMessageManager.runMessage(msgType,msgIncoming);
+		
+	}
+	public static PlayerNetworking getNetwork() {
+		return network;
+	}
+	public void onKeyPressed(int keyCode) {
+		//System.out.println("key press "+keyCode);
+		stateManager.getCurrentState().onKeyPressed(keyCode);	
+	}
+	public void onKeyReleased(int keyCode) {
+		//System.out.println("key release "+keyCode);
+		stateManager.getCurrentState().onKeyReleased(keyCode);
+		
+	}
+	public void onMousePressed(int button) {
+		//System.out.println("Mouse press "+button);
+		BPanel last = BGUIManager.lastMousedPanel;
+		BPanel mousePanel = BGUIManager.getMousePanel();
+		//System.out.println(mousePanel);
+		if (mousePanel == null)
+		{
+			if (last != null) //we are not over any panel right now, were we last frame, if so we exited that panel
+			{
+				last.onMouseExited();
+			}
+			HookManager.callHook("mousePressed", null);
+		}
+		else
+		{
+			if (last != mousePanel)//we are not over the same panel as last frame, we entered the new panel
+			{
+				
+				if (last != null) //if we were on a different panel last frame, we exited it
+				{
+					last.onMouseExited();
+				}
+				mousePanel.onMouseEntered();
+			}
+			mousePanel.onMousePressed(button);
+			return;
+		}
+		
+		BMenu.clearMenu();
+		
+		if (stateManager.getCurrentState() == null) return;
+
+		stateManager.getCurrentState().onMousePressed(button);
+		
+	}
+	public void onMouseReleased(int button) {
+		//System.out.println("Mouse release "+button);
+		BPanel last = BGUIManager.lastMousedPanel;
+		BPanel mousePanel = BGUIManager.getMousePanel();
+		if (mousePanel == null)
+		{
+			if (last != null) //we are not over any panel right now, were we last frame, if so we exited that panel
+			{
+				last.onMouseExited();
+			}
+			HookManager.callHook("mouseReleased", null);
+		}
+		else
+		{
+			if (last != mousePanel)//we are not over the same panel as last frame, we entered the new panel
+			{
+				
+				if (last != null)//if we were on a different panel last frame, we exited it
+				{
+					last.onMouseExited();
+				}
+				mousePanel.onMouseEntered();
+			}
+			mousePanel.onMouseReleased(button);
+			return;
+		}
+		if (stateManager.getCurrentState() == null) return;
+		stateManager.getCurrentState().onMouseReleased(button);
+		
+	}
+	public void onMouseDragged(int button) {
+		BPanel mousePanel = BGUIManager.getMousePanel();
+		if (mousePanel == null)
+		{
+			HookManager.callHook("mouseDragged", null);
+		}
+		else
+		{
+			mousePanel.onMouseDragged(button);
+			return;
+		}
+		if (stateManager.getCurrentState() == null) return;
+		stateManager.getCurrentState().onMouseDragged(button);
+		
+		
+	}
+	public void onMouseMoved() {
+		BPanel last = BGUIManager.lastMousedPanel;
+		BPanel mousePanel = BGUIManager.getMousePanel();
+
+		if (mousePanel == null)
+		{
+			if (last != null) //we are not over any panel right now, were we last frame, if so we exited that panel
+			{
+				last.onMouseExited();
+			}
+			HookManager.callHook("mouseMoved", null);
+		}
+		else
+		{
+			if (last != mousePanel)//we are not over the same panel as last frame, we entered the new panel
+			{
+				
+				if (last != null) //if we were on a different panel last frame, we exited it
+				{
+					last.onMouseExited();
+				}
+				mousePanel.onMouseEntered();
+			}
+			
+			mousePanel.onMouseMoved(0);
+			return;
+		}
+		if (stateManager.getCurrentState() == null) return;
+		stateManager.getCurrentState().onMouseMoved(0);
+		
+		
+	}
+	public static int getWidth() {
+		// TODO Auto-generated method stub
+		return Display.getWidth();
+	}
+	public static int getHeight() {
+		return Display.getHeight();
+	}
+	/**
+	 * Get the time in milliseconds
+	 * 
+	 * @return The system time in milliseconds
+	 */
+	public long getTime() {
+	    return (Sys.getTime() * 1000) / Sys.getTimerResolution();
+	}
+	public int getDelta() {
+	    long time = getTime();
+	    int delta = (int) (time - lastFrame);
+	    lastFrame = time;
+	    	
+	    return delta;
+	}
+
+
+	public void endGame() {
+		
+		
+	}
+
+
+
+}

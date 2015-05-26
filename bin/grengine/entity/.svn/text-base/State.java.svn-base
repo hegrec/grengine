@@ -1,0 +1,22 @@
+package entity;
+import world.Vec2;
+
+
+
+public class State {
+
+	
+	public Vec2 position;
+	public Vec2 velocity;
+	public double time;
+	public State()
+	{
+		position = new Vec2(0,0);
+		velocity = new Vec2(0,0);
+		time = 0f;
+	}
+	public boolean equals(State st)
+	{
+		return st.position.compareTo(position) && st.velocity.compareTo(velocity);
+	}
+}

@@ -1,0 +1,98 @@
+package world;
+
+import java.util.HashMap;
+
+import manager.ResourceManager;
+import manager.WorldManager;
+
+public class BaseChunkManager {
+
+	protected HashMap<String, WorldChunk> loadedChunks;
+	public BaseChunkManager()
+	{
+		loadedChunks = new HashMap<String, WorldChunk>();
+	}
+	public boolean chunkLoaded(Vec2 key) 
+	{
+		return loadedChunks.containsKey((int)key.x+":"+(int)key.y);
+	}
+
+	public WorldChunk createChunk(Vec2 vec)
+	{
+		Vec2 chunkPos = getChunkPosAtVector(vec);
+		WorldChunk chunk = new WorldChunk(chunkPos);
+		loadedChunks.put((int)chunkPos.x+":"+(int)chunkPos.y, chunk);
+		return chunk;
+	}
+	public void setTile(Tile t)
+	{
+		WorldChunk holdingChunk = getChunkAtVector(new Vec2(t.xTileSlot,t.yTileSlot));
+		
+		if (holdingChunk == null)
+		{
+			holdingChunk = createChunk(new Vec2(t.xTileSlot,t.yTileSlot));		
+		}
+		
+		
+		
+		
+		holdingChunk.setTile(t);
+		
+		if (isServerside())
+		{
+			((ServerChunkManager)this).saveTile(t);
+		}
+		else //client, create texture
+		{
+			
+		}
+	}
+	public void setTile(Tile t, boolean b) {
+		WorldChunk holdingChunk = getChunkAtVector(new Vec2(t.xTileSlot,t.yTileSlot));
+		
+		if (holdingChunk == null)
+		{
+			holdingChunk = createChunk(new Vec2(t.xTileSlot,t.yTileSlot));		
+		}
+		
+		
+		
+		holdingChunk.setTile(t);
+		
+		
+	}
+	public Tile getTile(Vec2 vec) 
+	{
+		WorldChunk chunk = getChunkAtVector(vec);
+		if (chunk == null)
+			return null;
+		return chunk.getTile(vec);
+		
+		
+	}
+	public WorldChunk getChunkAtVector(Vec2 vec)
+	{
+		Vec2 chunkPos = getChunkPosAtVector(vec);	
+		return getChunk(chunkPos);
+	}
+	
+	public Vec2 getChunkPosAtVector(Vec2 vec)
+	{
+		return new Vec2((float) Math.floor(vec.x/WorldManager.chunkSize)*WorldManager.chunkSize,(float) Math.floor(vec.y/WorldManager.chunkSize)*WorldManager.chunkSize);
+	}
+	
+	public void unloadChunk(Vec2 key)
+	{
+		//System.out.println("Removing Chunk at Vector: "+key);
+		loadedChunks.remove((int)key.x+":"+(int)key.y);
+	}
+	
+	public WorldChunk getChunk(Vec2 key)
+	{
+		return loadedChunks.get((int)key.x+":"+(int)key.y);
+	}
+	public boolean isServerside() {
+		return false;
+	}
+	
+}

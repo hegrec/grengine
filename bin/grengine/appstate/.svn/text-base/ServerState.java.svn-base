@@ -1,0 +1,980 @@
+package appstate;
+import entity.Entity;
+import game.inventory.Item;
+import game.npc.BaseNPC;
+import game.vehicle.BaseVehicle;
+
+import java.net.Socket;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
+
+import manager.BuildingManager;
+import manager.CommandManager;
+import manager.EntityManager;
+import manager.HookManager;
+import manager.MySQLManager;
+import manager.NWMessageManager;
+import manager.PhysicsManager;
+import manager.WorldManager;
+import network.ConnectionMon;
+import network.MessageConstants;
+import network.NetworkMessage;
+import player.Player;
+import player.PlayerNetworkOut;
+import player.PlayerNetworking;
+import resource.MapLoader;
+import resource.Pixel;
+import util.ConCommand;
+import util.Hook;
+import util.NWHook;
+import util.TickTimer;
+import util.Utilities;
+import weapon.BaseWeapon;
+import world.ServerChunkManager;
+import world.Tile;
+import world.Vec2;
+import building.Building;
+
+
+ 
+public class ServerState extends BaseState {
+
+	
+	private static boolean closing = false; //are we shutting down
+	
+	public ServerState(int port)
+	{
+		super();
+		System.out.println(">> Starting Cartel Country Server...");
+		BaseState.SERVER = true;
+		try
+		{	
+			//initialize the managers that need it
+			WorldManager.initializeWorld(new ServerChunkManager());
+			MySQLManager.initialize();
+			
+			//create the main socket for all incoming connections
+			ConnectionMon.get().initialize(this,port);
+			CommandManager.get().start();
+			
+			
+			registerCommands();
+			registerHooks();
+			registerNetworkHooks();
+		}
+		catch (Exception e)
+		{
+			System.out.println(e);
+		}
+	}
+	
+
+	
+
+
+	public void runServer()
+	{
+		startTime = System.currentTimeMillis();
+		
+		
+		//start the first tick value
+		long lastTick = System.currentTimeMillis();
+		
+		long lastSecond = lastTick;
+		int frames = 0;
+		
+		int fpsGap = 1000/BaseState.TICKRATE;
+		
+		
+		//Begin Map Loader Test Shit
+		MapLoader map = new MapLoader();
+		Pixel pixel = new Pixel();
+		for(int i=0;i<map.getHeight();i++)
+		{
+			for(int k=0;k<map.getWidth();k++)
+			{
+				pixel.setPos(k, i);
+				
+				Tile t = WorldManager.tileFromTemplate(pixel.getTileType());
+				//System.out.println(t.tileType);
+				t.setTileSlotX(k-500);
+				t.setTileSlotY(-1*(i-500));
+				
+				
+				WorldManager.setTile(t,true);
+				//System.out.println("Tile type: " + pixel.getTileType() + " was set @ position (" + (k-500) + "," + (i-500) + ") - Color: " + pixel.getColor());
+			}
+		}
+		 
+		WorldManager.loadWorld();
+		try {
+			BuildingManager.loadBuildings();
+		} catch (SQLException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
+		for (int i=0;i<50;i++)
+		{
+		float x = -404f + ((float)(Math.random()*50f));
+		float y = 70f + ((float)(Math.random()*15f));
+		BaseNPC ent = new BaseNPC();
+		ent.setPos(new Vec2(x,y));
+		EntityManager.spawnEntity(ent);
+		}
+		
+		
+		BaseVehicle entttt = new BaseVehicle();
+		entttt.setPos(new Vec2(-420,100));
+		EntityManager.spawnEntity(entttt);
+		
+		
+		BaseVehicle enttt = new BaseVehicle();
+		enttt.setPos(new Vec2(-320,100));
+		EntityManager.spawnEntity(enttt);
+		
+		Entity wep = Item.createEntity("AK-47");
+		wep.setPos(new Vec2(-420,90));
+		EntityManager.spawnEntity(wep);
+		
+		System.out.println(">> Server Online!");
+		while(true)
+		{
+			//calculate the total frames elapsed in the past second (fps)
+			if (System.currentTimeMillis()>lastSecond+1000)
+			{
+				currentFPS = frames;
+				frames = 0;
+				lastSecond = System.currentTimeMillis();
+				//System.out.println(currentFPS);
+				
+			}
+			
+			if (System.currentTimeMillis() > lastTick+fpsGap )//&& ((EntityManager.getGlobalPlayerCount() > 0)))
+			{
+				float delta = TickTimer.GetETime();
+				lastTick = System.currentTimeMillis();
+				
+				//check for lagged out players
+				validateConnections(delta);
+				
+				Entity ents[] = EntityManager.getGlobalEntities();
+				
+				for (int i=0;i<ents.length;i++)
+				{
+					Entity ent = ents[i];
+					
+					//remove entities that need to be removed this frame
+					if (ent.remove)
+					{
+						removeEntity(ent);
+						continue;
+					}
+					
+					//make the entities think
+					if (ent.shouldThink())
+					{
+						if (getCurrentTime() > ent.getNextThink())
+						{
+							ent.think();
+						}
+					}	
+					
+				}
+				//perform a physics iteration
+				PhysicsManager.simulate(delta);
+				
+				//check for players who moved into new chunks and send those chunks
+				WorldManager.updateStreamedWorld(EntityManager.getGlobalPlayers());
+				
+				
+				
+				//update entity data and finally send all network data buffered this frame
+				updateNWVariables();
+				updateEntityStates();
+				sendNetworkData();
+				frames++;
+			}
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			
+			if (closing)
+			{
+				System.out.println("Shutting down Cartel Country Server...");
+				break;
+			}
+		}
+	}
+	/**
+	 * This function will remove worldchunks that have no nearby players and add new ones if needed
+	 */
+
+	private void updateEntityStates() {
+		Entity ents[] = EntityManager.getGlobalEntities();
+		Player players[] = EntityManager.getGlobalPlayers();
+		
+		for (int index=0;index<ents.length;index++)
+		{
+			Entity ent = ents[index];
+			if (!ent.currentState.equals(ent.lastState))
+			{
+				ent.lastState.position = ent.currentState.position;
+				ent.lastState.velocity = ent.currentState.velocity;
+				
+				NetworkMessage msg = new NetworkMessage();
+				msg.writeShort(MessageConstants.ENTITY_UPDATE);
+				msg.writeInt(ent.getEntID());
+				msg.writeVector(ent.currentState.position);
+				msg.writeVector(ent.currentState.velocity);
+				msg.writeVector(ent.getAimVector());
+				if (ent.isPlayer())
+					msg.writeDouble(((Player) ent).lastInputTime);
+				else
+					msg.writeDouble(getCurrentTime());
+				
+				for (int i=0;i<players.length;i++)
+				{
+					
+					//if (players[i].getPos().distanceSquared(ent.getPos()) < WorldManager.chunkSize*WorldManager.chunkSize)
+						players[i].getNetworkHandler().sendMessage(msg);
+				}	
+			}
+			else
+			{
+				//System.out.println("states are the same!");
+			}
+		}
+		
+	}
+	
+	private void updateEntityStates(Entity updated) {
+
+		
+		if (!updated.getAimVector().compareTo(updated.lastAimVector()) || !updated.currentState.equals(updated.lastState))
+		{
+			
+			//if (!updated.lastState.velocity.compareTo(new Vec2(0,0)) && updated.currentState.velocity.compareTo(new Vec2(0,0)))
+				//System.out.println("Entity stopped moving");
+			
+			
+			//System.out.println("Sending entity update");
+			updated.lastState.position = updated.currentState.position;
+			updated.lastState.velocity = updated.currentState.velocity;
+			
+			
+			
+			NetworkMessage msg = new NetworkMessage();
+			msg.writeShort(MessageConstants.ENTITY_UPDATE);
+			msg.writeInt(updated.getEntID());
+			msg.writeVector(updated.currentState.position);
+			msg.writeVector(updated.currentState.velocity);
+			msg.writeVector(updated.getAimVector());
+			
+			if (updated.isPlayer())
+				msg.writeDouble(((Player) updated).lastInputTime);
+			else
+				msg.writeDouble(getCurrentTime());
+					
+			msg.writeInput(updated.input);
+			Player players[] = EntityManager.getGlobalPlayers();
+			for (int i=0;i<players.length;i++)
+			{
+				//if (players[i].getPos().distanceSquared(updated.getPos()) < WorldManager.chunkSize*WorldManager.chunkSize)
+					players[i].getNetworkHandler().sendMessage(msg);
+			}	
+		}
+	}
+	
+
+	private void sendNetworkData() {
+		Player plys[] = EntityManager.getGlobalPlayers();
+		for(int i=0;i<plys.length;i++)
+		{
+			Player ply = plys[i];
+			ply.getNetworkHandler().sendFrameData();
+		}
+		
+	}
+
+	private void removeEntity(Entity ent) {
+		
+		int eID = ent.getEntID();
+		
+		EntityManager.removeEntity(ent);
+		
+		NetworkMessage msg = new NetworkMessage();
+		msg.writeShort(MessageConstants.REMOVE_ENTITY);
+		msg.writeInt(eID);
+		
+		Player plys[] = EntityManager.getGlobalPlayers();
+		
+		for(int i=0;i<plys.length;i++)
+		{
+			plys[i].getNetworkHandler().sendMessage(msg);
+		}
+		
+		System.out.println("removing entity id "+eID);
+		
+	}
+
+
+
+
+	public void validateConnections(float delta) {
+		
+		Player plys[] = EntityManager.getGlobalPlayers();
+		
+		for (int i=0;i<plys.length;i++)
+		{
+			Player ply = plys[i];			
+			ply.lagTime += delta;			
+			if (plys[i].lagTime>2) //lagtime is reset when a network message is received
+			{
+				
+				ply.disconnect();
+				ply.remove();
+			
+				System.out.println("Player #"+ply.getPlayerID()+" has lagged out! Dropped player from server...");
+			}
+		}
+		
+	}
+
+	
+
+
+
+	private void updateNWVariables() {
+		Entity ents[] = EntityManager.getGlobalEntities();
+		Player plys[] = EntityManager.getGlobalPlayers();
+		
+		for (int i=0;i<ents.length;i++)
+		{
+			Entity ent = ents[i];
+			
+			for (Map.Entry<String, Integer> entry : ent.nwVars.intFrameMap.entrySet()) 
+			{
+				for (int pID=0;pID<plys.length;pID++)
+				{
+					Player ply = plys[pID];
+					
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWINT_SYNC);
+					msg.writeInt(ents[i].getEntID()); //ent id
+					msg.writeString(entry.getKey()); //dName
+					msg.writeInt(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+				}
+				
+			}
+			for (Map.Entry<String, String> entry : ent.nwVars.stringFrameMap.entrySet()) 
+			{
+				for (int pID=0;pID<plys.length;pID++)
+				{
+					Player ply = plys[pID];
+					
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWSTRING_SYNC);
+					msg.writeInt(ents[i].getEntID()); //ent id
+					msg.writeString(entry.getKey()); //dName
+					msg.writeString(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+				}
+				
+			}
+			for (Map.Entry<String, Vec2> entry : ent.nwVars.vecFrameMap.entrySet()) 
+			{
+				for (int pID=0;pID<plys.length;pID++)
+				{
+					Player ply = plys[pID];
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWVEC_SYNC);
+					msg.writeInt(ents[i].getEntID()); //eid
+					msg.writeString(entry.getKey()); //dName
+					msg.writeVector(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+				}
+			}
+			for (Map.Entry<String, Integer> entry : ent.nwVars.entityFrameMap.entrySet()) 
+			{
+				for (int pID=0;pID<plys.length;pID++)
+				{
+					Player ply = plys[pID];
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWENTITY_SYNC);
+					msg.writeInt(ents[i].getEntID()); //eid
+					msg.writeString(entry.getKey()); //dName
+					msg.writeInt(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+				}
+			}
+			
+			
+			ent.nwVars.clearFrame();
+		}
+		
+	}
+	private void updateNWVariables(Entity ent,Player ply) {
+		
+			for (Map.Entry<String, Integer> entry : ent.nwVars.intMap.entrySet()) 
+			{
+
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWINT_SYNC);
+					msg.writeInt(ent.getEntID()); //ent id
+					msg.writeString(entry.getKey()); //dName
+					msg.writeInt(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+				
+			}
+			for (Map.Entry<String, String> entry : ent.nwVars.stringMap.entrySet()) 
+			{
+				
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWSTRING_SYNC);
+					msg.writeInt(ent.getEntID()); //ent id
+					msg.writeString(entry.getKey()); //dName
+					msg.writeString(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+				
+			}
+			for (Map.Entry<String, Vec2> entry : ent.nwVars.vecMap.entrySet()) 
+			{
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWVEC_SYNC);
+					msg.writeInt(ent.getEntID()); //eid
+					msg.writeString(entry.getKey()); //dName
+					msg.writeVector(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+			}
+			for (Map.Entry<String, Integer> entry : ent.nwVars.entityMap.entrySet()) 
+			{
+					NetworkMessage msg = new NetworkMessage();
+					msg.writeShort(MessageConstants.NWENTITY_SYNC);
+					msg.writeInt(ent.getEntID()); //eid
+					msg.writeString(entry.getKey()); //dName
+					msg.writeInt(entry.getValue()); //dData
+					
+					ply.getNetworkHandler().sendMessage(msg);
+			}
+		
+	}
+	
+	public void onNewConnection(Socket incoming)
+	{
+		storeConnectingClient(incoming);
+	}
+	
+	private void storeConnectingClient(Socket incoming) {
+		
+		//initialize the player's network handler
+		PlayerNetworking playerConnection = new PlayerNetworking(incoming,this);
+		
+		//create the player
+		Player newPlayer = new Player(playerConnection);
+
+		newPlayer.setPos(new Vec2(-429,102));
+		
+
+		
+		
+		//spawn the player
+		EntityManager.spawnEntity(newPlayer);
+		
+		
+		//load the world if needed
+		WorldManager.loadForPlayer(newPlayer);
+		
+		//send the world
+		playerSendLocalWorld(newPlayer);
+		
+		//send info about all entities
+		sendFullUpdate(newPlayer);
+		onPlayerConnect(newPlayer);
+	}
+	
+	
+	public void onPlayerConnect(Player newPlayer) {
+		System.out.println("Player has connected ("+newPlayer.getIPAddress()+") ID #"+newPlayer.getPlayerID());
+		
+		//tell the player about its entity
+		NetworkMessage msg = new NetworkMessage();
+		msg.writeShort(MessageConstants.INITIAL_SPAWN);
+		msg.writeInt(newPlayer.getPlayerID());
+		msg.writeDouble(startTime);
+		msg.writeString("Welcome to Cartel Country!");
+		
+	
+		newPlayer.getNetworkHandler().sendMessage(msg);
+		
+		
+	}
+
+
+
+
+
+	public void onSpawnedEntity(Entity ent)
+	{
+		//System.out.println("SERVERSTATE: NEW ENTITY SPAWNED!");
+		Player[] plys = EntityManager.getGlobalPlayers();
+		for (int i=0;i<plys.length;i++)
+		{
+				informOfEntity(plys[i],ent);
+		}
+		
+	}
+	
+	//send the entire state of all entities
+	public void sendFullUpdate(Player ply) {
+		Entity ents[] = EntityManager.getGlobalEntities();
+		for(int i=0;i<ents.length;i++)
+		{
+			if (ents[i] != ply)
+				informOfEntity(ply,ents[i]);
+			
+			updateNWVariables(ents[i],ply);
+		}
+	}
+	
+	//notify the player of a new entity to be created on their client
+	private void informOfEntity(Player ply,Entity entity) {
+		NetworkMessage msg = new NetworkMessage();
+		msg.writeShort(MessageConstants.CREATE_ENTITY);
+		
+		msg.writeInt(entity.getEntID()); //eid
+		msg.writeInt(entity.uniqueID);
+		
+		msg.writeString(entity.getClass().getCanonicalName()); //entity class
+		msg.writeVector(entity.getPos()); //position
+		msg.writeVector(entity.getAimVector());
+		//System.out.println("Entity Pos: "+entity.getPos());
+		ply.getNetworkHandler().sendMessage(msg);
+		
+	}
+	
+	//sends world chunks near the player
+	private void playerSendLocalWorld(Player newPlayer) {
+		Tile[] tilesToSend = ((ServerChunkManager) WorldManager.chunkMgr).getLocalTiles(newPlayer.getPos());
+		short sz = 32767;
+		NetworkMessage msg = new NetworkMessage(sz);
+		msg.writeShort(MessageConstants.TILE_SET_TILE);
+		msg.writeInt(tilesToSend.length);
+		//System.out.println("Attempting to send "+tilesToSend.length+" tiles in one message");
+		int tilesSent = 0;
+		for (int i=0;i<tilesToSend.length;i++)
+		{
+			
+			Tile t = tilesToSend[i];
+			if (t == null) continue;
+			if (!msg.writeInt(t.xTileSlot)) break;
+			if (!msg.writeInt(t.yTileSlot)) break;
+			if (!msg.writeInt(t.getTileID())) break;
+			if (!msg.writeInt(t.angle)) break;
+			tilesSent++;
+			
+		}
+		newPlayer.getNetworkHandler().sendMessage(msg);
+		
+
+		//System.out.println("Sent "+tilesSent+" tiles in network message of size "+msg.getSize());
+	}
+	private void sendTile(Tile t)
+	{
+		NetworkMessage msg = new NetworkMessage();
+		msg.writeShort(MessageConstants.TILE_UPDATE);
+		msg.writeInt(t.xTileSlot); //x
+		msg.writeInt(t.yTileSlot); //y
+		msg.writeInt(t.getTileID());//tid
+		msg.writeInt(t.angle);
+		
+		Player[] plys = EntityManager.getGlobalPlayers();
+		for (int i=0;i<plys.length;i++)
+		{
+			plys[i].getNetworkHandler().sendMessage(msg);
+		}
+	}
+	
+	public void onReceiveMessage(PlayerNetworking connectionOwner, NetworkMessage msgIncoming)
+	{
+		Player ply = connectionOwner.getPlayer();
+		short msgType = msgIncoming.readShort();
+		ply.lagTime = 0f;
+		
+		//System.out.println(msgType);
+		
+		NWMessageManager.runMessage(msgType, msgIncoming,ply);
+		
+	}
+
+	//as long as no more than first float is read it should not break!
+	private void receiveInput(NetworkMessage msgIncoming, Player ply) 
+	{
+		//order is 
+		//short packetID
+		//float inputtime
+		//input 
+		//
+		//inputtime is when the input was grabbed and sent
+		
+		double inputTime = msgIncoming.readDouble();
+		//System.out.println(time+" "+connectionOwner.getPlayer().lastInputTime);
+		
+		//System.out.println("READING"+" "+inputTime);
+		if (inputTime < ply.lastInputTime)
+              return;
+		float deltaTime = (float) (inputTime-ply.lastInputTime);
+		 ply.lastInput = ply.input;
+		 ply.input = msgIncoming.readInput();
+		 ply.lastInputTime = inputTime;
+
+         Vec2 mouseWorldVec = msgIncoming.readVector();
+         ply.mouseWorldVec = mouseWorldVec;
+         Vec2 mouseAimVec = mouseWorldVec.subtract(ply.getPos()).normalize();
+         ply.setAimVector(mouseAimVec);
+         //the time elapsed since the last input tick
+         
+         
+         //player wants to shoot his weapon
+ 
+         if (ply.input.attack)
+        	 playerAttack(ply,inputTime);
+         
+         
+         if (ply.input.use && !ply.lastInput.use)
+         {
+        	 Entity useEnt = Utilities.traceLine(ply.getPos(), ply.getPos().add(ply.getAimVector().scale(2f)), ply);
+        	if (useEnt != null)
+        		useEnt.onUse(ply);
+         }
+         //System.out.println(deltaTime);
+         PhysicsManager.simulate(deltaTime,ply);
+         updateEntityStates(ply);
+	}
+
+
+	private void playerAttack(Player ply, double inputTime) {
+
+
+		BaseWeapon playerWep = ply.getActiveWeapon();
+		
+		if (playerWep == null) return;
+		if (playerWep.getNextShot() > getCurrentTime()) return;
+		
+		
+		playerWep.setNextShot((float) (getCurrentTime()+playerWep.getFireRate()));
+		
+		//TODO: Go back in time via stored moves serverside to the time of firing (inputTime)
+		
+		Vec2 lineStart = ply.getPos().add(ply.getAimVector());
+		Vec2 lineEnd = ply.getPos().add(ply.getAimVector().scale(10));
+	
+		Entity hitEnt = Utilities.traceLine(lineStart,lineEnd,ply);
+		
+		if (hitEnt != null)
+		{
+			entityTakeDamage(hitEnt,playerWep.getDamage());
+		}
+		
+		
+	}
+
+
+
+	private void entityTakeDamage(Entity hitEnt, int damage) {
+		
+		if (!hitEnt.takesDamage()) return;
+		
+		int newHP = hitEnt.getHealth()-damage;
+		if (newHP < 0)
+			newHP = 0;
+		hitEnt.setHealth(newHP);
+		if (hitEnt.getHealth() <= 0)
+		{
+			hitEnt.remove();
+			System.out.println(hitEnt+" has died");
+		}
+	}
+	private void playerSay(Player ply,String message)
+	{
+		int plyID = -1;
+		String playerName = "Console: ";
+		if (ply != null)
+		{
+			plyID = ply.getPlayerID();
+			playerName = ply.getName();
+		}
+		NetworkMessage msg = new NetworkMessage();
+		msg.writeShort(MessageConstants.PLAYER_SAY);
+		msg.writeInt(plyID);
+		msg.writeString(message);
+		
+		Player[] plys = EntityManager.getGlobalPlayers();
+		
+		for (int index=0;index<plys.length;index++)
+			plys[index].getNetworkHandler().sendMessage(msg);
+
+		System.out.println(playerName+message);
+	}
+
+	public static void shutdown() {
+		closing = true;
+	}
+	
+	private void registerHooks() {
+
+		//add various hooks
+		HookManager.addHook("spawnedEntity", new Hook() { public void onRun(Object[] args) {onSpawnedEntity((Entity) args[0]); }});
+		HookManager.addHook("chunkChanged", new Hook() { public void onRun(Object[] args) {
+			
+			
+			
+			playerSendLocalWorld((Player) args[0]); }});
+		
+		
+	}
+
+	private void registerCommands() {
+
+		//register various console commands
+		CommandManager.registerConCommand("fps", new ConCommand() { public void onRan(String[] args){ System.out.println("Current FPS: "+currentFPS); }});
+		CommandManager.registerConCommand("sethealth", new ConCommand() { public void onRan(String[] args){ EntityManager.getEntity(Integer.parseInt(args[1])).setHealth(Integer.parseInt(args[2])); }});
+		
+		CommandManager.registerConCommand("entcreate", new ConCommand() { public void onRan(String[] args){
+
+			
+			
+			int x = Integer.parseInt(args[1]);
+			int y = Integer.parseInt(args[2]);
+			Entity ent = new Entity();
+			ent.setPos(new Vec2(x,y));
+			System.out.println(x+" "+y);
+			EntityManager.spawnEntity(ent);
+		
+		
+		}});
+		
+		
+		CommandManager.registerConCommand("entstress", new ConCommand() { public void onRan(String[] args){
+
+			
+			for (int i=0;i<20;i++)
+			{
+			float x = (float) (Math.random()*20);
+			float y = (float) (Math.random()*20);
+			BaseNPC ent = new BaseNPC();
+			ent.setPos(new Vec2(x,y));
+			System.out.println(x+" "+y);
+			EntityManager.spawnEntity(ent);
+			}
+		
+		}});		
+		
+		
+		CommandManager.registerConCommand("settile", new ConCommand() { public void onRan(String[] args)
+		
+						{ 
+							int tileX = Integer.parseInt(args[1]);
+							int tileY = Integer.parseInt(args[2]);
+							int tileID =  Integer.parseInt(args[3]);
+							
+							Tile t = WorldManager.tileFromTemplate(tileID);
+							t.setTileSlotX(tileX);
+							t.setTileSlotY(tileY);
+							System.out.println("Setting tile "+tileX+" "+tileY+" "+tileID);
+							WorldManager.setTile(t); 
+							sendTile(t);
+							
+						}
+
+		});
+		
+		
+		
+		CommandManager.registerConCommand("say", new ConCommand() { public void onRan(String[] args)
+		
+		{ 
+			String message = "";
+			for (int arg=1;arg<args.length;arg++)
+				message += " " + args[arg];
+				
+			
+			
+			playerSay(null,message);
+			
+
+			
+			
+		}
+		
+		
+		
+
+});
+		
+		
+		
+CommandManager.registerConCommand("nrp", new ConCommand() { public void onRan(String[] args)
+		
+		{ 
+			HashMap<Short,Integer> map = PlayerNetworkOut.nwProfiler;
+			
+
+			for (Map.Entry<Short, Integer> entry : map.entrySet()) 
+			{
+				System.out.println("Message ID: "+entry.getKey()+" KBytes: "+(entry.getValue()/1024f)+" KB/s: "+((entry.getValue()/1024f)/getCurrentTime()));
+				
+			}
+			
+			
+		}
+		
+		
+		
+
+});
+		
+		
+		
+	}
+	
+	
+	
+	private void registerNetworkHooks() {
+
+		NWMessageManager.addCallback(MessageConstants.INPUT_SYNC, new NWHook() { public void onRun(Player ply,NetworkMessage msgIncoming) {receiveInput(msgIncoming,ply);}});
+		
+		NWMessageManager.addCallback(MessageConstants.EDITOR_TILE_PLACE, new NWHook() { public void onRun(Player ply,NetworkMessage msgIncoming) {
+
+		
+			int x = msgIncoming.readInt();
+			int y = msgIncoming.readInt();
+			int tileID = msgIncoming.readInt();
+			
+			
+			
+			Tile t = WorldManager.tileFromTemplate(tileID);
+			t.setTileSlotX(x);
+			t.setTileSlotY(y);
+			
+			
+			
+			Tile oldTile = WorldManager.getTileAtPos(new Vec2(x,y));
+			if (oldTile.getTileID() == tileID)//the tile was the same, rotate 90
+			{
+				int angle = oldTile.angle;
+				t.angle = angle+90;
+				if (t.angle >= 360)
+				{
+					t.angle = 0;
+				}
+			
+			}
+			WorldManager.setTile(t);
+			sendTile(t);
+		
+		
+		}});
+		
+		NWMessageManager.addCallback(MessageConstants.EDITOR_BUILDING_PLACE, new NWHook() { public void onRun(Player ply,NetworkMessage msgIncoming) {
+
+			
+			float x = msgIncoming.readFloat();
+			float y = msgIncoming.readFloat();
+			String buildingType = msgIncoming.readString();
+			
+			Vec2 buildingPos = new Vec2(x,y);
+			System.out.println(buildingType);
+			Building b = BuildingManager.spawnBuilding(buildingType);
+			b.setPos(buildingPos);
+			
+			try {
+				BuildingManager.saveBuilding(b);
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		
+		}});
+		NWMessageManager.addCallback(MessageConstants.TRY_PICKUP_ITEM, new NWHook() { public void onRun(Player ply,NetworkMessage msgIncoming) {
+
+			Entity itemEnt = EntityManager.getEntity(msgIncoming.readInt());
+			
+			
+			if (itemEnt == null)
+			{
+				System.out.println("Entity does not exist");
+				return;
+			}
+			
+			float distToMe = itemEnt.getPos().distance(ply.getPos());
+			if (distToMe > 2)
+			{
+				System.out.println("too far to pickup");
+				return;
+			}
+			
+			String itemType = itemEnt.getNWString("itemType");
+			
+			
+			
+			if (Item.getByType(itemType) == null) return;
+			
+			if (ply.pickupItem(itemType))
+			{
+				itemEnt.remove();
+				
+
+				NetworkMessage msg = new NetworkMessage();
+				msg.writeShort(MessageConstants.ITEM_PICKUP);
+				msg.writeString(itemType);
+				ply.getNetworkHandler().sendMessage(msg);
+					
+				
+			}
+		
+		}});
+		NWMessageManager.addCallback(MessageConstants.TRY_DROP_ITEM, new NWHook() { public void onRun(Player ply,NetworkMessage msgIncoming) {
+
+			String itemType = msgIncoming.readString();
+			
+			System.out.println(itemType);
+			
+			if (!ply.hasItem(itemType))
+				return;
+			
+			
+			System.out.println("BLASDSD");
+			ply.dropItem(itemType);
+			
+			Entity itemEnt = Item.createEntity(itemType);
+			itemEnt.setPos(ply.getPos().add(ply.getAimVector().scale(2)));
+			EntityManager.spawnEntity(itemEnt);
+			
+			
+
+			NetworkMessage msg = new NetworkMessage();
+			msg.writeShort(MessageConstants.ITEM_DROP);
+			msg.writeString(itemType);
+			ply.getNetworkHandler().sendMessage(msg);
+				
+				
+		
+		}});
+		
+	}
+	
+	
+	
+}

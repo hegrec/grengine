@@ -1,0 +1,11 @@
+package network;
+/**
+ * Helper class to handle incoming network messages
+ * @author Chris
+ *
+ */
+//TODO write this class to handle registerMessage(int msgID, MessageHandler callback)
+public class MessageHandler {
+
+	
+}

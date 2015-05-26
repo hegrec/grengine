@@ -1,0 +1,104 @@
+package resource;
+
+import java.awt.Color;
+
+
+public class Pixel {
+	static int pIDtracker=0;
+	private int pixelID;
+	private int xPos;
+	private int yPos;
+	
+	public Pixel(int pixelID)
+	{
+		this.pixelID = pixelID;
+	}
+	public Pixel()
+	{
+		this.pixelID = pIDtracker;
+		pIDtracker = pIDtracker+1;
+		
+	}
+	
+	private boolean validPos(int xPos, int yPos)
+	{
+		if(xPos<resource.MapLoader.map.getWidth() && xPos>=0 && yPos>=0 && yPos<resource.MapLoader.map.getHeight())
+			return true;
+		else
+			return false;	
+	}
+	
+	public void setPos (int xPos, int yPos)
+	{
+		if(validPos(xPos,yPos)){
+			this.xPos = xPos;
+			this.yPos = yPos;
+		}else System.out.println("Position Invalid.");
+	}
+	
+	public void setColor(int red,int green,int blue)
+	{
+		if(red > 255 || red < 0 ||  green>255 || green < 0 || blue > 255 || blue < 0)
+			System.out.println("Pixel color out of range.");
+		else if(!validPos(this.xPos,this.yPos))
+			System.out.println("Position Invalid.  Could not set color.");
+		else
+			System.out.println("");
+			// TODO: Make this change the pixel color.
+	}
+	
+	public int getColor()
+	{
+		if(validPos(this.xPos,this.yPos))
+			return resource.MapLoader.map.getRGB(this.xPos,this.yPos);
+		else
+			System.out.println("Bad position set.  Could not get color.");
+			return -1;
+	}
+	
+	public static int[] convertColor(int rgb)
+	{
+		int red = (rgb & 0x00ff0000) >> 16;
+		int green = (rgb & 0x0000ff00) >> 8;
+		int blue = (rgb & 0x000000ff);
+		
+		int[] rgbArray = {red,green,blue};
+		
+		return rgbArray;
+	}
+	
+	public static int convertColor(int red,int green,int blue)
+	{
+		Color color = new Color(red,green,blue);
+		int rgb = color.getRGB();
+		return rgb;
+	}
+	
+	public String getTileType()
+	{	
+		// #6bb8cf
+		if (getColor()==-9717553)
+			return "Water";
+		// #5c923f
+		if (getColor()==-10711234)
+			return "Grass"; 
+		// #ceaf30
+		if (getColor()==-3231952)
+			return "Sand";
+		// #6e6e6e
+		if (getColor()==-9539986)
+			return "Rock";
+		else
+			return "Grass";
+	}
+	
+	public int getPosX()
+	{
+		return this.xPos;
+	}
+	
+	public int getPosY()
+	{
+		return this.yPos;
+	}
+}

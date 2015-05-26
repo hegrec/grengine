@@ -1,0 +1,104 @@
+package player;
+
+import java.io.IOException;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import appstate.BaseState;
+import network.NetworkMessage;
+
+
+
+public class PlayerNetworking {
+
+	
+	private Socket mySock;
+	private Player myPlayer;
+	private PlayerNetworkIn inward;
+	private PlayerNetworkOut outward;
+	private BaseState state;
+	
+	public PlayerNetworking(Socket incoming, BaseState state)
+	{
+		mySock = incoming;
+
+		inward = new PlayerNetworkIn(this,incoming);
+		outward = new PlayerNetworkOut(incoming);
+		this.state = state;
+		inward.start();
+		
+		
+		
+	}
+
+	public int getBytesInPerSecond()
+	{
+		return inward.getBytesPerSecond();
+	}
+
+
+	public Player getPlayer()
+	{
+		return myPlayer;
+	}
+
+	public Socket getSocket()
+	{
+		return mySock;
+	}
+
+
+ 
+
+
+//Send data to flash player
+	public void sendMessage(NetworkMessage msg) {
+		outward.addMessage(msg);
+	}
+
+
+
+
+
+//receive data from flash player
+	public void receiveMessage(NetworkMessage msg) {
+		state.onReceiveMessage(this,msg);
+		
+		
+	}
+
+	public void setPlayer(Player player) {
+		myPlayer = player;
+		
+	}
+
+
+
+	public void disconnect() {
+		System.out.println("Player has disconnected!");
+		try {
+			inward.close();
+			outward.close();
+			mySock.close();
+			mySock = null;
+			return;
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+
+	public void sendFrameData() {
+		outward.sendFrameData();
+		
+	}
+
+
+
+
+
+
+	
+}

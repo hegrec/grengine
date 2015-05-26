@@ -1,0 +1,63 @@
+package world;
+
+import java.util.ArrayList;
+
+import manager.WorldManager;
+
+public class MultiTile extends Tile {
+
+	
+	ArrayList<Tile> tileSet;
+	Vec2 position;
+	public MultiTile()
+	{
+		
+		tileSet = new ArrayList<Tile>();
+		position = new Vec2(0,0);
+	}
+	
+	public void setPos(Vec2 pos)
+	{
+		position.x = pos.x;
+		position.y = pos.y;
+	}
+	public int getX()
+	{
+		return (int) position.x;
+		
+	}
+	public int getY()
+	{
+		return (int) position.y;
+	}
+	public void addTile(String tileType,int localX,int localY)
+	{
+		Tile t = WorldManager.tileFromTemplate(tileType);
+		t.mTile = this;
+		t.setTileSlotX(localX+getX());
+		t.setTileSlotY(localY+getY());
+		tileSet.add(t);
+		
+	}
+	public boolean isMultiTile() {
+		// TODO Auto-generated method stub
+		return true;
+	}
+
+
+	public ArrayList<Tile> getTileSet() {
+		// TODO Auto-generated method stub
+		return tileSet;
+	}
+
+	public void addTile(String tileType,int localX,int localY,int angle)
+	{
+		Tile t = WorldManager.tileFromTemplate(tileType);
+		t.mTile = this;
+		t.angle = angle;
+		t.setTileSlotX(localX+getX());
+		t.setTileSlotY(localY+getY());
+		tileSet.add(t);
+		
+	}
+}

@@ -1,0 +1,251 @@
+package world;
+
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import manager.HookManager;
+import manager.MySQLManager;
+import manager.WorldManager;
+
+import appstate.ServerState;
+
+import player.Player;
+import util.Profiler;
+
+
+
+
+
+public class ServerChunkManager extends BaseChunkManager {
+
+	public WorldLoader loader;
+	
+	public ServerChunkManager() {
+		super();
+		
+		loader = new WorldLoader();
+	}
+	public void loadWorld()
+	{
+		try {
+			loader.loadWorld();
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+
+	public WorldChunk loadChunk(Vec2 vec){
+		vec = getChunkPosAtVector(vec);
+		if(chunkLoaded(vec))
+			return getChunk(vec); //already loaded
+		//System.out.println("Loading Chunk at Vector: "+vec);
+		Tile tileData[] = null;
+		try {
+			tileData = loader.loadChunkData(vec);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		WorldChunk chunk = createChunk(vec);
+		if (tileData == null) return chunk;
+		for (int index=0;index<tileData.length;index++)
+		{
+			Tile tile = tileData[index];
+			if (getChunkAtVector(new Vec2(tile.xTileSlot,tile.yTileSlot)) == chunk)
+				chunk.setTile(tile);
+			else
+			{
+				System.out.println("Bad placement Tile ("+tile.xTileSlot+","+tile.yTileSlot+")");
+				System.out.println("Placed in chunk at ("+vec.x+","+vec.y+")");
+			}
+
+		}
+		
+		
+		return chunk;
+	}
+
+	
+
+
+	public void loadChunksForPlayer(Player ply)
+	{
+
+		ply.setCurrentChunk(loadNineChunks(ply.getPos()));
+		
+	}
+
+	private WorldChunk loadNineChunks(Vec2 pos)
+	{
+		Vec2 centerChunkPos = getChunkPosAtVector(pos);
+		Vec2 chunkTL = centerChunkPos.add(new Vec2(-WorldManager.chunkSize,WorldManager.chunkSize));
+		Vec2 chunkL = centerChunkPos.add(new Vec2(-WorldManager.chunkSize,0));
+		Vec2 chunkBL = centerChunkPos.add(new Vec2(-WorldManager.chunkSize,-WorldManager.chunkSize));
+		Vec2 chunkB = centerChunkPos.add(new Vec2(0,-WorldManager.chunkSize));
+		Vec2 chunkBR = centerChunkPos.add(new Vec2(WorldManager.chunkSize,-WorldManager.chunkSize));
+		Vec2 chunkR = centerChunkPos.add(new Vec2(WorldManager.chunkSize,0));
+		Vec2 chunkTR = centerChunkPos.add(new Vec2(WorldManager.chunkSize,WorldManager.chunkSize));
+		Vec2 chunkT = centerChunkPos.add(new Vec2(0,WorldManager.chunkSize));
+		
+		
+		
+		WorldChunk center = loadChunk(centerChunkPos);
+		loadChunk(chunkTL);
+		loadChunk(chunkL);
+		loadChunk(chunkBL);
+		loadChunk(chunkB);
+		loadChunk(chunkBR);
+		loadChunk(chunkR);
+		loadChunk(chunkTR);
+		loadChunk(chunkT);
+		return center;
+
+		
+	}
+	public Tile[] getLocalTiles(Vec2 pos)
+	{
+		Vec2 centerChunkPos = getChunkPosAtVector(pos);
+		
+		Vec2 minChunkArea = centerChunkPos.add(new Vec2(-WorldManager.chunkSize,-WorldManager.chunkSize)); //bottom left
+		Vec2 maxChunkArea = centerChunkPos.add(new Vec2(2*WorldManager.chunkSize-1,2*WorldManager.chunkSize-1)); //top right
+		
+		Tile[] tileData = new Tile[WorldManager.chunkSize*WorldManager.chunkSize*9];
+		int num = 0;
+		for (int x = (int) minChunkArea.x;x<=maxChunkArea.x;x++)
+		{
+			for (int y = (int) minChunkArea.y;y<=maxChunkArea.y;y++)
+			{
+				tileData[num] = getTile(new Vec2(x,y));
+				num++;
+			}
+		}
+		
+		return tileData;
+	}
+
+
+
+	
+	public void checkForPlayerChange(Player ply) 
+	{
+		//TODO make this cleaner
+		
+		if (ply.getCurrentChunk() == null || ply.getCurrentChunk() != getChunkAtVector(ply.getPos())) //player changed chunks
+		{
+			//Profiler prof = new Profiler();
+			//prof.start();
+			//if (ply.getCurrentChunk() != null)
+				//clearOldChunks(ply.getCurrentChunk());
+			
+
+			loadNineChunks(ply.getPos());
+			getChunkAtVector(ply.getPos()).addPlayer(ply);
+			ply.setCurrentChunk(getChunkAtVector(ply.getPos()));
+			//prof.dump();
+			Object[] a = {ply};
+			HookManager.callHook("chunkChanged", a);
+			
+		}
+		
+	}
+
+	private void clearOldChunks(WorldChunk oldPlayerChunk) 
+	{
+		Vec2 chunkTL = oldPlayerChunk.getPos().add(new Vec2(-WorldManager.chunkSize,WorldManager.chunkSize));
+		Vec2 chunkL = oldPlayerChunk.getPos().add(new Vec2(-WorldManager.chunkSize,0));
+		Vec2 chunkBL = oldPlayerChunk.getPos().add(new Vec2(-WorldManager.chunkSize,-WorldManager.chunkSize));
+		Vec2 chunkB = oldPlayerChunk.getPos().add(new Vec2(0,-WorldManager.chunkSize));
+		Vec2 chunkBR = oldPlayerChunk.getPos().add(new Vec2(WorldManager.chunkSize,-WorldManager.chunkSize));
+		Vec2 chunkR = oldPlayerChunk.getPos().add(new Vec2(WorldManager.chunkSize,0));
+		Vec2 chunkTR = oldPlayerChunk.getPos().add(new Vec2(WorldManager.chunkSize,WorldManager.chunkSize));
+		Vec2 chunkT = oldPlayerChunk.getPos().add(new Vec2(0,WorldManager.chunkSize));
+		
+		
+		
+		
+		
+		if (chunkTL != null && !neighborsHavePlayers(chunkTL))
+			unloadChunk(chunkTL);
+		
+		if (chunkL != null && !neighborsHavePlayers(chunkL))
+			unloadChunk(chunkL);
+		
+		if (chunkBL != null && !neighborsHavePlayers(chunkBL))
+			unloadChunk(chunkBL);
+		
+		if (chunkB != null && !neighborsHavePlayers(chunkB))
+			unloadChunk(chunkB);
+		
+		if (chunkBR != null && !neighborsHavePlayers(chunkBR))
+			unloadChunk(chunkBR);
+		
+		if (chunkR != null && !neighborsHavePlayers(chunkR))
+			unloadChunk(chunkR);
+		
+		if (chunkTR != null && !neighborsHavePlayers(chunkTR))
+			unloadChunk(chunkTR);
+		
+		if (chunkT != null && !neighborsHavePlayers(chunkT))
+			unloadChunk(chunkT);
+		
+	}
+	private boolean neighborsHavePlayers(Vec2 chunkPos) 
+	{
+		
+		WorldChunk chunkTL = getChunkAtVector(chunkPos.add(new Vec2(-WorldManager.chunkSize,WorldManager.chunkSize)));
+		WorldChunk chunkL = getChunkAtVector(chunkPos.add(new Vec2(-WorldManager.chunkSize,0)));
+		WorldChunk chunkBL = getChunkAtVector(chunkPos.add(new Vec2(-WorldManager.chunkSize,-WorldManager.chunkSize)));
+		WorldChunk chunkB = getChunkAtVector(chunkPos.add(new Vec2(0,-WorldManager.chunkSize)));
+		WorldChunk chunkBR = getChunkAtVector(chunkPos.add(new Vec2(WorldManager.chunkSize,-WorldManager.chunkSize)));
+		WorldChunk chunkR = getChunkAtVector(chunkPos.add(new Vec2(WorldManager.chunkSize,0)));
+		WorldChunk chunkTR = getChunkAtVector(chunkPos.add(new Vec2(WorldManager.chunkSize,WorldManager.chunkSize)));
+		WorldChunk chunkT = getChunkAtVector(chunkPos.add(new Vec2(0,WorldManager.chunkSize)));
+		
+		if (chunkTL != null && chunkTL.hasPlayers())
+			return true;
+		
+		if (chunkL != null && chunkL.hasPlayers())
+			return true;
+		
+		if (chunkBL != null && chunkBL.hasPlayers())
+			return true;
+		
+		if (chunkB != null && chunkB.hasPlayers())
+			return true;
+		
+		if (chunkBR != null && chunkBR.hasPlayers())
+			return true;
+		
+		if (chunkR != null && chunkR.hasPlayers())
+			return true;
+		
+		if (chunkTR != null && chunkTR.hasPlayers())
+			return true;
+		
+		if (chunkT != null && chunkT.hasPlayers())
+			return true;
+		
+		return false;
+	}
+	public boolean isServerside() {
+		// TODO Auto-generated method stub
+		return true;
+	}
+
+
+	public void saveTile(Tile t) {
+		try {
+			loader.saveTile(t);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+
+}

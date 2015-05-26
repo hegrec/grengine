@@ -1,0 +1,51 @@
+package resource;
+
+import javax.imageio.*;
+import java.io.*;
+import java.awt.image.*;
+
+public class MapLoader {
+	File file;
+	static BufferedImage map;
+	
+	// Read map.png
+	public MapLoader()
+	{
+		try{
+			file = new File("resource/map.png");
+		}catch (NullPointerException error){
+			System.out.println("File Not Loaded: \n" + error.getMessage());
+		}finally{
+			if (file != null)
+				System.out.println("File Loaded");
+		}
+		
+		try{
+			map = ImageIO.read(file);
+		} catch (IOException error) {
+			System.out.println("Map Not Loaded: \n" + error.getMessage());
+		}finally{
+			if (map != null)
+				System.out.println("Map Loaded");
+		}
+	}
+	
+	public int getHeight()
+	{
+		return map.getHeight();
+	}
+	public int getWidth()
+	{
+		return map.getWidth();
+	}
+	
+	public void loadMap()
+	{
+		// TODO: Create a 2D-array map[pixelX][pixelY].  Load into MySQL.
+	}
+	
+	public void saveMap()
+	{
+		// TODO: Read from MySQL.  Create new image.  Save.
+	}
+}

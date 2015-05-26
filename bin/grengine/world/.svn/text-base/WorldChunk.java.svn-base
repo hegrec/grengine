@@ -1,0 +1,111 @@
+package world;
+
+
+import java.util.ArrayList;
+
+import manager.WorldManager;
+
+import player.Player;
+
+
+//Chunks are computed with a bottom left origin
+public class WorldChunk {
+
+	private Vec2 chunkPos;
+	private Tile[][] tiles;
+	private ArrayList<Player> currentPlayers;
+	public long loadTime;
+	public WorldChunk(Vec2 vec)
+	{
+		chunkPos = vec;
+		tiles = new Tile[WorldManager.chunkSize][WorldManager.chunkSize];
+		
+		currentPlayers = new ArrayList<Player>();
+		clearChunk();
+	}
+	/**
+	 * This defaults all tiles in the chunk to a default water tile
+	 */
+	public void clearChunk()
+	{
+		for (int x=0;x<tiles.length;x++)
+		{
+			for (int y=0;y<tiles[x].length;y++)
+			{
+				double tileID = 3.0*Math.random();
+				Tile t = WorldManager.tileFromTemplate("Grass"); //(int) (1+tileID));
+				t.xTileSlot = (int) (chunkPos.x+x);
+				t.yTileSlot = (int) (chunkPos.y+y);
+				tiles[x][y] = t;
+			}
+		}
+		
+	}
+	public void setPos(Vec2 chunkPos2) {
+		chunkPos = chunkPos2;
+		
+	}
+	public boolean vectorIsInChunk(Vec2 vec)
+	{
+		if (vec.x < chunkPos.x)
+			return false;
+		if (vec.x > chunkPos.x+WorldManager.chunkSize)
+			return false;
+		
+		if (vec.y < chunkPos.y)
+			return false;
+		if (vec.y > chunkPos.y+WorldManager.chunkSize)
+			return false;
+			
+		return true;
+		
+	}
+	public Vec2 getPos() 
+	{
+		return chunkPos;
+	}
+	public void setTile(Tile t) 
+	{
+
+		int xIndex = (int) (t.xTileSlot - chunkPos.x);
+		int yIndex = (int) (t.yTileSlot - chunkPos.y);
+		tiles[xIndex][yIndex] = t;
+
+		
+		
+		
+		
+	}
+
+
+	public Tile getTile(Vec2 vec) 
+	{
+
+		int xIndex = (int) (vec.x - chunkPos.x);
+		int yIndex = (int) (vec.y - chunkPos.y);
+		return tiles[xIndex][yIndex];
+	}
+
+
+	public void addPlayer(Player ply) {
+		currentPlayers.add(ply);
+		
+	}
+	public boolean hasPlayers()
+	{
+		return currentPlayers.size() > 0;
+	}
+	public Tile[] getTiles() {
+		Tile[] data = new Tile[WorldManager.chunkSize*WorldManager.chunkSize];
+		int num = 0;
+		for (int x=0;x<tiles.length;x++)
+		{
+			for (int y=0;y<tiles[x].length;y++)
+			{
+				data[num] = tiles[x][y];
+				num++;
+			}
+		}
+		return data;
+	}
+}

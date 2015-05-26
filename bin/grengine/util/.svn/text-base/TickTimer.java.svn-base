@@ -1,0 +1,17 @@
+package util;
+
+public class TickTimer
+{
+  //store last time sample
+  private static long lastTime = System.currentTimeMillis();
+  private static float etime;
+
+  //calculate and return elapsed time since last call
+  public static float GetETime()
+  {
+    etime = (System.currentTimeMillis() - lastTime) / 1000.0f;
+    lastTime = System.currentTimeMillis();
+    
+    return etime;
+  }
+}

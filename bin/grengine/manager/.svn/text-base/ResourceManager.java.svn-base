@@ -1,0 +1,76 @@
+package manager;
+
+import java.io.IOException;
+
+import player.Player;
+import player.PlayerNetworking;
+import render.Camera;
+import resource.Texture;
+import resource.TextureLoader;
+import appstate.ClientState;
+
+/**
+ * Our singleton resource loader
+ * @author Chris
+ *
+ */
+public abstract class ResourceManager {
+
+	private static Camera viewCam;
+	private static ClientState clientState;
+	private static TextureLoader textureLoader = new TextureLoader();
+	
+    public static int ScrW()
+    {
+    	return ClientState.getWidth();
+    }
+    public static int ScrH()
+    {
+    	return ClientState.getHeight();
+    }
+ 
+    public static PlayerNetworking getNetwork()
+    {
+    	return ClientState.getNetwork();
+    }
+	public static Player getLocalPlayer() {
+    	return ClientState.localPlayer;
+	}
+	public static Camera getViewCam() {
+		// TODO Auto-generated method stub
+		return viewCam;
+	}
+	public static void setViewCam(Camera worldCam)
+	{
+		viewCam = worldCam;
+	}
+	public static Texture loadTexture(String texture) {
+		// TODO Auto-generated method stub
+		try {
+			return textureLoader.getTexture(texture);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+	public static Texture getTexture(String texture) {
+		// TODO Auto-generated method stub
+		try {
+			return textureLoader.getTexture(texture);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+	public static ClientState getClientState() {
+		// TODO Auto-generated method stub
+		return clientState;
+	}
+	public static void setClientState(ClientState cState)
+	{
+		clientState = cState;
+	}
+
+}

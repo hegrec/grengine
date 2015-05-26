@@ -1,0 +1,103 @@
+package world;
+
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+
+import manager.MySQLManager;
+import manager.WorldManager;
+
+import appstate.ServerState;
+
+public class WorldLoader {
+
+	public Tile[] loadChunkData(Vec2 vec) throws SQLException
+	{
+		MySQLManager.prepareStatement("SELECT * FROM mmog_mapdata WHERE x>=? AND x<? AND y>=? AND y <?;");
+		MySQLManager.preparedStatement.setInt(1, (int) vec.x);
+		MySQLManager.preparedStatement.setInt(2, (int) vec.x+WorldManager.chunkSize);
+		MySQLManager.preparedStatement.setInt(3, (int) vec.y);
+		MySQLManager.preparedStatement.setInt(4, (int) vec.y+WorldManager.chunkSize);
+		ResultSet rSet = MySQLManager.preparedStatement.executeQuery();
+		ArrayList<Tile> tileData = new ArrayList<Tile>();
+		while (rSet.next())
+		{
+			int x = rSet.getInt("x");
+			int y = rSet.getInt("y");
+			int tileID = rSet.getInt("tileID");
+			Tile tile = WorldManager.tileFromTemplate(tileID);
+			tile.setTileSlotX(x);
+			tile.setTileSlotY(y);
+			tileData.add(tile);
+		}
+		if (tileData.size() == 0)
+		{
+			return null;
+		}
+		
+		
+		Tile[] tiles = new Tile[tileData.size()];
+		for (int i=0;i<=tiles.length;i++)
+			tiles[i] = tileData.get(i);
+		return tiles;
+	}
+	
+	public void loadWorld() throws SQLException
+	{
+		MySQLManager.prepareStatement("SELECT * FROM mmog_mapdata;");
+		ResultSet rSet = MySQLManager.preparedStatement.executeQuery();
+		while (rSet.next())
+		{
+			int x = rSet.getInt("x");
+			int y = rSet.getInt("y");
+			String tileID = rSet.getString("tileID");
+			int angle = rSet.getInt("angle");
+			Tile tile = WorldManager.tileFromTemplate(tileID);
+			tile.setTileSlotX(x);
+			tile.setTileSlotY(y);
+			tile.angle = angle;
+			WorldManager.setTile(tile);
+		}
+		
+	}
+	
+	public void saveTile(Tile t) throws SQLException
+	{
+		
+		int xPos = t.xTileSlot;
+		int yPos = t.yTileSlot;
+		int angle = t.angle;
+		String tileType = t.tileType;
+		
+		MySQLManager.prepareStatement("SELECT * FROM mmog_mapdata WHERE x=? AND y=?;");
+		MySQLManager.preparedStatement.setInt(1, xPos);
+		MySQLManager.preparedStatement.setInt(2, yPos);
+		ResultSet rSet = MySQLManager.preparedStatement.executeQuery();
+
+		
+		//the tile does not exist, we are saving a new one to the db
+		if (!rSet.next())
+		{
+			System.out.println("no tile found,"+xPos+" "+yPos);
+			MySQLManager.prepareStatement("INSERT INTO mmog_mapdata (x,y,tileID,angle) VALUES (?,?,?,?)");
+			MySQLManager.preparedStatement.setInt(1, xPos);
+			MySQLManager.preparedStatement.setInt(2, yPos);
+			MySQLManager.preparedStatement.setString(3, tileType);
+			MySQLManager.preparedStatement.setInt(4, angle);
+			MySQLManager.preparedStatement.executeUpdate();
+			
+			
+		}
+		else
+		{
+			MySQLManager.prepareStatement("UPDATE mmog_mapdata SET tileID=?, angle=? WHERE x=? AND y=?");
+			MySQLManager.preparedStatement.setString(1, tileType);
+			MySQLManager.preparedStatement.setInt(2, angle);
+			MySQLManager.preparedStatement.setInt(3, xPos);
+			MySQLManager.preparedStatement.setInt(4, yPos);
+			MySQLManager.preparedStatement.executeUpdate();
+			
+		}
+	}
+}

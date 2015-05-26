@@ -1,0 +1,117 @@
+package manager;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import world.Tile;
+import world.Vec2;
+import building.Building;
+
+public abstract class BuildingManager {
+
+	
+	private static Building[] templates = new Building[100];
+	private static int numBuildingsDefined = 0;
+	public static Building defineBuilding(String buildingName) {
+		
+		Building b = new Building();
+		b.buildingName = buildingName;
+		b.buildingTypeID = numBuildingsDefined;
+		templates[numBuildingsDefined++] = b;
+		return b;
+	}
+	public static Building spawnBuilding(String bName)
+	{
+		Building template = getBuildingByType(bName);
+		
+		Building realEntity = new Building();
+		realEntity.buildingTypeID = template.buildingTypeID;
+		realEntity.buildingName = template.buildingName;
+		realEntity.setNWInt("bID", realEntity.buildingTypeID);
+		realEntity.setNWString("tex",template.getNWString("tex"));
+		EntityManager.spawnEntity(realEntity);
+		return realEntity;
+	}
+	public static Building spawnBuilding(int buildingID) {
+		Building template = getBuildingByID(buildingID);
+		
+		Building realEntity = new Building();
+		realEntity.buildingTypeID = template.buildingTypeID;
+		realEntity.buildingName = template.buildingName;
+		realEntity.setNWInt("bID", realEntity.buildingTypeID);
+		realEntity.setNWString("tex",template.getNWString("tex"));
+		EntityManager.spawnEntity(realEntity);
+		return realEntity;
+	}
+	public static Building getBuildingByID(int id)
+	{
+		
+		return templates[id];
+	}
+	public static Building getBuildingByType(String name)
+	{
+		for (int i=0;i<templates.length;i++)
+		{
+			if (templates[i] != null && templates[i].buildingName.equalsIgnoreCase(name))
+			{
+				return templates[i];
+			}
+		}
+		return null;
+		
+	}
+	public static Building buildingFromTemplate(String string) {
+		Building template = getBuildingByType(string);
+		
+		
+		Building b = new Building();
+		b.setNWInt("bID", template.buildingTypeID);
+		b.setNWString("tex",template.getNWString("tex"));
+		return b;
+	}
+
+	public static Building[] getTemplates() {
+		// TODO Auto-generated method stub
+		return templates;
+	}
+
+	public static void loadBuildings() throws SQLException {
+
+		
+		
+		MySQLManager.prepareStatement("SELECT * FROM mmog_buildings;");
+		ResultSet rSet = MySQLManager.preparedStatement.executeQuery();
+		while (rSet.next())
+		{
+			float x = rSet.getFloat("x");
+			float y = rSet.getFloat("y");
+			String buildingType = rSet.getString("BuildingType");
+
+			Building b = spawnBuilding(buildingType);
+			b.setPos(new Vec2(x,y));
+			
+		}
+		
+		
+	}
+	
+	public static void saveBuilding(Building b) throws SQLException
+	{
+		
+		float xPos = b.getPos().x;
+		float yPos = b.getPos().y;
+		String buildingType = b.buildingName;
+		
+		MySQLManager.prepareStatement("INSERT INTO mmog_buildings (x,y,BuildingType) VALUES (?,?,?)");
+		MySQLManager.preparedStatement.setFloat(1, xPos);
+		MySQLManager.preparedStatement.setFloat(2, yPos);
+		MySQLManager.preparedStatement.setString(3, buildingType);
+		MySQLManager.preparedStatement.executeUpdate();
+			
+	
+	}
+	
+	
+	
+	
+}

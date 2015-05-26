@@ -1,0 +1,17 @@
+package util;
+
+import player.Player;
+import network.NetworkMessage;
+
+public class NWHook {
+	
+	public void onRun(NetworkMessage msg)
+	{
+		
+	}
+
+	public void onRun(Player ply, NetworkMessage msgIncoming) {
+		// TODO Auto-generated method stub
+		
+	}
+}

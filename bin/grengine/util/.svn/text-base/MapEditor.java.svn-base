@@ -1,0 +1,187 @@
+package util;
+
+import java.util.ArrayList;
+
+import manager.BuildingManager;
+import manager.HookManager;
+import manager.ResourceManager;
+import manager.WorldManager;
+import network.MessageConstants;
+import network.NetworkMessage;
+import render.Camera;
+import render.GUI;
+import resource.Texture;
+import world.Tile;
+import world.Vec2;
+import bgui.BButton;
+import bgui.BFrame;
+import bgui.BPanelList;
+import building.Building;
+
+public class MapEditor extends BFrame {
+
+	private BPanelList tileList;
+	private BPanelList buildingList;
+	private String currTileType;
+	private String currBuildingType;
+	private Building preview;
+	private boolean mouseDown = false;
+	private Vec2 lastTilePos;
+	public MapEditor()
+	{
+		currTileType = "";
+		this.setPos(100,100);
+		this.setSize(200,300);
+		
+		tileList = (BPanelList) this.addPanel(new BPanelList());
+		tileList.setPos(5,25);
+		tileList.setSize(95,this.getHeight()-30);
+		
+		for (int i=0;i<WorldManager.getTileTypes().length;i++)
+		{
+			final Tile type = WorldManager.getTileTypes()[i];
+			if (type != null)
+			{
+				BButton btn = new BButton() {
+					
+					public void onMousePressed(int btn)
+					{
+						currTileType = type.tileType;
+						currBuildingType = null;
+					}
+					
+				};
+				btn.setHeight(30);
+				btn.setLabel(type.tileType);
+				tileList.addToList(btn);
+			}
+		}
+		
+		
+		
+		buildingList = (BPanelList) this.addPanel(new BPanelList());
+		buildingList.setPos(tileList.getX()+tileList.getWidth()+5,25);
+		buildingList.setSize(this.getWidth()-(tileList.getX()+tileList.getWidth()+10),this.getHeight()-30);
+		
+		for (int i=0;i<BuildingManager.getTemplates().length;i++)
+		{
+			final Building type = BuildingManager.getTemplates()[i];
+			if (type != null)
+			{
+				BButton btn = new BButton() {
+					
+					public void onMousePressed(int btn)
+					{
+						currBuildingType = type.buildingName;
+						currTileType = null;
+					}
+					
+				};
+				btn.setHeight(30);
+				btn.setLabel(type.buildingName);
+				buildingList.addToList(btn);
+			}
+		}
+		
+		
+		
+		this.invalidateLayout();
+		
+		
+		
+		HookManager.addHook("mousePressed", new Hook() { public void onRun(Object[] args) {mouseDown = true; tryTilePlace(); }});
+		HookManager.addHook("mouseReleased", new Hook() { public void onRun(Object[] args) {mouseDown = false; }});
+		HookManager.addHook("mouseDragged", new Hook() { public void onRun(Object[] args) {mouseDown = false; tryTilePlaceDrag(); }});
+		HookManager.addHook("postDrawWorld", new Hook() { public void onRun(Object[] args) {
+
+			
+		if (currBuildingType == null || this == null)
+			return;
+		
+			preview = BuildingManager.getBuildingByType(currBuildingType);
+			
+			float centerX = GUI.getMouseX();
+			float centerY = GUI.getMouseY();
+			float width = (preview.getOBBMax().x-preview.getOBBMin().x)*Camera.vectorSize;
+			float height = (preview.getOBBMax().y-preview.getOBBMin().y)*Camera.vectorSize;
+			
+			
+			
+			String tex = preview.getNWString("tex");
+			
+			if (tex == null)
+				tex = "resource/missing.png";
+			
+			Texture t = ResourceManager.loadTexture(tex);
+			
+			
+			GUI.drawSprite(centerX,centerY,width,height,t,0);
+		
+		
+		
+		
+		
+		
+		}});
+		
+	}
+	protected void tryTilePlaceDrag() {
+		if (currTileType != null && WorldManager.getTileByType(currTileType) != null)
+		{
+			
+			Vec2 worldPos = ResourceManager.getViewCam().screenToWorld(GUI.getMouseX(), GUI.getMouseY());
+			
+			Vec2 tilePos = WorldManager.getTilePosAtPos(new Vec2(worldPos.x,worldPos.y));
+			
+			
+			if (lastTilePos.compareTo(tilePos)) return;
+			
+			
+			
+			NetworkMessage msg = new NetworkMessage();
+			msg.writeShort(MessageConstants.EDITOR_TILE_PLACE);
+			msg.writeInt((int) tilePos.x);
+			msg.writeInt((int) tilePos.y);
+			msg.writeInt(WorldManager.getTileByType(currTileType).getTileID());
+			ResourceManager.getNetwork().sendMessage(msg);
+		}
+		
+	}
+	public void performLayout()
+	{
+		super.performLayout();
+		buildingList.setSize(this.getWidth()-(tileList.getX()+tileList.getWidth()+10),this.getHeight()-30);
+		
+	}
+	protected void tryTilePlace() {
+		
+		if (currTileType != null && WorldManager.getTileByType(currTileType) != null)
+		{
+		
+			Vec2 worldPos = ResourceManager.getViewCam().screenToWorld(GUI.getMouseX(), GUI.getMouseY());
+			
+			Vec2 tilePos = WorldManager.getTilePosAtPos(new Vec2(worldPos.x,worldPos.y));
+			
+			
+			lastTilePos = tilePos;
+			
+			NetworkMessage msg = new NetworkMessage();
+			msg.writeShort(MessageConstants.EDITOR_TILE_PLACE);
+			msg.writeInt((int) tilePos.x);
+			msg.writeInt((int) tilePos.y);
+			msg.writeInt(WorldManager.getTileByType(currTileType).getTileID());
+			ResourceManager.getNetwork().sendMessage(msg);
+		}
+		else if (currBuildingType != null && BuildingManager.buildingFromTemplate(currBuildingType) != null)
+		{
+			Vec2 worldPos = ResourceManager.getViewCam().screenToWorld(GUI.getMouseX(), GUI.getMouseY());
+			
+			NetworkMessage msg = new NetworkMessage();
+			msg.writeShort(MessageConstants.EDITOR_BUILDING_PLACE);
+			msg.writeFloat(worldPos.x);
+			msg.writeFloat(worldPos.y);
+			msg.writeString(currBuildingType);
+			ResourceManager.getNetwork().sendMessage(msg);
+		}
+	}
+}

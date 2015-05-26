@@ -1,0 +1,65 @@
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/hegrec/!svn/ver/156/trunk/Flash%20RP/src/manager
+END
+NWMessageManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/NWMessageManager.java
+END
+ResourceManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/ResourceManager.java
+END
+MySQLManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/MySQLManager.java
+END
+WorldManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/WorldManager.java
+END
+EntityManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 72
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/EntityManager.java
+END
+HookManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 70
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/HookManager.java
+END
+BuildingManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/BuildingManager.java
+END
+PhysicsManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/PhysicsManager.java
+END
+BGUIManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 70
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/BGUIManager.java
+END
+CommandManager.java
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/svn/hegrec/!svn/ver/160/trunk/Flash%20RP/src/manager/CommandManager.java
+END

@@ -1,0 +1,187 @@
+package player;
+import appstate.BaseState;
+import game.inventory.Inventory;
+import game.inventory.Item;
+import input.Input;
+import manager.ResourceManager;
+import network.MessageConstants;
+import network.NetworkMessage;
+import weapon.BaseWeapon;
+import world.Vec2;
+import entity.Entity;
+
+
+public class Player extends Entity {
+	
+	private int iCharID; //CharID
+	private String iCharName;
+	private PlayerNetworking myConnection;
+	public Vec2 mouseVec;
+	public float lastNetworkMessage; //use for the server to drop laggers
+	public boolean moving;
+	public Vec2 lastTilePos;
+
+	public double lastInputTime;
+	public boolean connected;
+	public float lagTime; //the time elapsed since the last network message
+	public Input lastInput;
+	private BaseWeapon activeWeapon;
+	public Vec2 mouseWorldVec;
+	public Inventory inventory;
+
+	public Player(PlayerNetworking playerNetworking)
+	{
+		super();
+		myConnection = playerNetworking;
+		myConnection.setPlayer(this);
+		input = new Input();
+		mouseVec = new Vec2(0,0);
+		moving = false;
+		connected = false;
+		lastInputTime = 0;
+		inventory = new Inventory();
+		
+		
+		
+		setHealth(100);
+		setMaxHealth(100);
+		lagTime = 0;
+		setNoThink(true);
+		setTexture("resource/soldier.png");
+		setPhysicsType(PHYS_WALK);
+	}
+
+
+
+	public Player() {
+		super();
+		input = new Input();
+		mouseVec = new Vec2(0,0);
+		moving = false;
+		connected = false;
+		lastInputTime = 0;
+		inventory = new Inventory();
+		
+		
+		
+		setHealth(100);
+		setMaxHealth(100);
+		lagTime = 0;
+		setNoThink(true);
+		setTexture("resource/soldier.png");
+		setPhysicsType(PHYS_WALK);
+	}
+
+	public void setCharID(int iCharID) 
+	{
+		this.iCharID = iCharID;
+	}
+
+	public int getCharID() 
+	{
+		return iCharID;
+	}
+
+	public int getPlayerID() 
+	{
+		return getEntID();
+	}
+
+	public void setCharName(String iCharName) 
+	{
+		this.iCharName = iCharName;
+	}
+
+	public String getCharName() 
+	{
+		return iCharName;
+	}
+	
+	public PlayerNetworking getNetworkHandler()
+	{
+		return myConnection;
+	}
+
+	public boolean isPlayer()
+	{
+		return true;
+	}
+
+
+	
+	public Vec2 physicsSimulate(float delta) {
+		Vec2 vec = new Vec2(0,0);
+		
+		if (this.input.up)
+		{
+			vec = vec.add(new Vec2(0,1));
+		}
+		if (this.input.down)
+		{
+			vec = vec.add(new Vec2(0,-1));
+		}
+		if (this.input.left)
+		{
+			vec = vec.add(new Vec2(-1,0));
+		}
+		if (this.input.right)
+		{
+			vec = vec.add(new Vec2(1,0));
+		}
+		return vec;
+	}
+	public void disconnect() {
+		myConnection.disconnect();
+		myConnection = null;
+		
+	}
+
+	public boolean pickupItem(String itemType)
+	{
+		if (!this.inventory.canHold(itemType))
+			return false;
+		
+		this.inventory.addItem(itemType);
+		
+		
+		return true;
+	}
+	public void dropItem(String itemType) {
+		this.inventory.removeItem(itemType);
+		
+	}
+
+	public void setActiveWeapon(BaseWeapon baseWeapon) {
+		this.activeWeapon = baseWeapon;
+		
+	}
+	public BaseWeapon getActiveWeapon()
+	{
+		return this.activeWeapon;
+	}
+
+
+
+	public Inventory getInventory() {
+		// TODO Auto-generated method stub
+		return inventory;
+	}
+
+
+
+	public boolean hasItem(String itemType) {
+		// TODO Auto-generated method stub
+		return inventory.hasItem(itemType);
+	}
+
+
+
+	public String getIPAddress() {
+		return getNetworkHandler().getSocket().getInetAddress().getHostAddress();
+	}
+
+
+
+
+
+}

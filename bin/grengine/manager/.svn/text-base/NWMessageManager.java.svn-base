@@ -1,0 +1,82 @@
+package manager;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import player.Player;
+
+import network.NetworkMessage;
+import util.NWHook;
+
+public abstract class NWMessageManager {
+	
+	
+	private static HashMap<Short,NWHook> msgMap = new HashMap<Short,NWHook>();
+	private static ArrayList<Object[]> messageQueue = new ArrayList<Object[]>();
+
+	public static void addCallback(short msgID,NWHook hnd)
+	{
+		System.out.println("ADDED: "+msgID);
+		msgMap.put(msgID,hnd);
+	}
+	public static void runMessage(short msgType, NetworkMessage msgIncoming) {
+
+		
+		synchronized(messageQueue)
+		{
+			Object[] msg = new Object[2];
+			msg[0] = msgType;
+			msg[1] = msgIncoming;
+			
+			
+			
+			messageQueue.add(msg);
+		}
+		
+		//if (msgMap.get(msgType) != null)
+		//	msgMap.get(msgType).onRun(msgIncoming);
+		
+	}
+	public static void runQueuedMessages() {
+		
+		synchronized (messageQueue)
+		{
+			while (!messageQueue.isEmpty())
+			{
+				Object[] msgData = messageQueue.get(0);
+				
+				short msgType = (Short) msgData[0];
+				
+				NetworkMessage msgIncoming = (NetworkMessage) msgData[1];
+				if (msgMap.get(msgType) != null)
+				{
+					if (msgData.length == 2)
+						msgMap.get(msgType).onRun(msgIncoming);
+					else
+					{
+						
+						Player ply = (Player) msgData[2];
+						msgMap.get(msgType).onRun(ply,msgIncoming);
+					}
+				}
+				else
+				{
+					System.out.println(msgType+" not a valid message");
+				}
+				messageQueue.remove(0);
+			}
+		}
+		
+	}
+	public static void runMessage(short msgType, NetworkMessage msgIncoming,
+			Player ply) {
+		
+		
+		if (msgMap.get(msgType) != null)
+			msgMap.get(msgType).onRun(ply,msgIncoming);
+		else
+			System.out.println(msgType+" not a valid message");
+		
+	}
+
+}
